@@ -34,9 +34,9 @@ fn get_animation() -> Vec<StyledString> {
     (0..width + 1)
         .map(|x| {
             let ip = if x as f64 <= width as f64 / 2.0 {
-                (x as f64 / (width as f64 / 2.0)).circular_out() / 2.0
+                (x as f64 / (width as f64 / 2.0)).bounce_out() / 2.0
             } else {
-                ((x - width / 2) as f64 / (width as f64 / 2.0)).circular_in() / 2.0 + 1.0.quintic_out() / 2.0
+                ((x - width / 2) as f64 / (width as f64 / 2.0)).bounce_in() / 2.0 + 1.0.quintic_out() / 2.0
             };
             (ip * width as f64) as usize
         })
