@@ -4,6 +4,76 @@ use cursive::event::{Event, EventResult, AnyCb};
 use cursive::direction::Direction;
 use cursive::view::{View, ViewWrapper, Selector};
 use cursive::views::{TextView};
+use cursive::utils::markup::StyledString;
+use interpolation::Ease;
+use voca_rs::chop;
+
+const CAR: &str = "
+    ▄█████████████▄
+   ▄██▀▀▀▀██▀▀▀▀████▄
+  ▄██▀    ██     ▀████▄
+ ▄███▄▄▄▄▄██▄▄▄▄▄▄▄█████▄
+███████████████████████████▄
+████████████████████████████
+██████▀▀████████████▀▀██████
+▀▀▀██    ██▀▀▀▀▀▀██    ██▀▀▀
+   ███▄▄███      ███▄▄███
+     ▀▀▀▀          ▀▀▀▀
+";
+const CAR_WIDTH: usize = 28;
+const WIDTH: usize = 80;
+
+/// Repeat the string `s` `n` times by concatenating.
+pub fn repeat_str<S: Into<String> + Clone>(s: S, n: usize) -> String {
+    std::iter::repeat(s.into()).take(n).collect::<String>()
+}
+
+fn get_animation() -> Vec<StyledString> {
+    let width = WIDTH + CAR_WIDTH;
+
+    (0..width + 1)
+        .map(|x| {
+            let ip = if x as f64 <= width as f64 / 2.0 {
+                (x as f64 / (width as f64 / 2.0)).circular_out() / 2.0
+            } else {
+                ((x - width / 2) as f64 / (width as f64 / 2.0)).circular_in() / 2.0 + 1.0.quintic_out() / 2.0
+            };
+            (ip * width as f64) as usize
+        })
+        .map(|f| {
+            let mut result = StyledString::default();
+            for line in CAR.lines() {
+                if f == 0 || f == width{
+                    result.append_plain(format!(
+                        "{}\n",
+                        repeat_str(" ", WIDTH),
+                    ));
+                } else if f < CAR_WIDTH {
+                    result.append_plain(format!(
+                        "{}{}\n",
+                        chop::substr(line, CAR_WIDTH - f, 0),
+                        repeat_str(" ", width - f - CAR_WIDTH),
+                    ));
+                } else if f >= WIDTH {
+                    result.append_plain(format!(
+                        "{}{}\n",
+                        repeat_str(" ", f - CAR_WIDTH),
+                        chop::substr(line, 0, CAR_WIDTH - (f - WIDTH)),
+                    ));
+                } else {
+                    result.append_plain(format!(
+                        "{}{}{}\n",
+                        repeat_str(" ", f - CAR_WIDTH),
+                        line,
+                        repeat_str(" ", width - f - CAR_WIDTH),
+                    ));
+                }
+            }
+
+            result
+        })
+        .collect::<Vec<_>>()
+}
 
 pub struct DelayView<T: View> {
     view: T,
@@ -26,6 +96,8 @@ impl<T: View> ViewWrapper for DelayView<T> {
 pub struct AsyncView<T: View + Send> {
     view: Option<T>,
     loading: TextView,
+    animation: Vec<StyledString>,
+    pos: usize,
     rx: Receiver<T>,
 }
 
@@ -42,9 +114,12 @@ impl<T: View + Send> AsyncView<T> {
             tx.send(creator()).unwrap();
             sink.send(Box::new(|_: &mut Cursive| {}))
         });
+
         Self {
             view: None,
-            loading: TextView::new("Loading..."),
+            loading: TextView::new(""),
+            animation: get_animation(),
+            pos: 0,
             rx,
         }
     }
@@ -59,6 +134,12 @@ impl<T: View + Send + Sized> View for AsyncView<T> {
     }
 
     fn layout(&mut self, vec: Vec2) {
+        self.loading.set_content(self.animation[self.pos].clone());
+        self.pos += 1;
+        if self.pos >= self.animation.len() {
+            self.pos = 0;
+        }
+
         match self.view {
             Some(ref mut view) => view.layout(vec),
             None => self.loading.layout(vec),

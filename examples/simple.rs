@@ -7,12 +7,13 @@ fn main() {
     cursive::logger::init();
 
     let mut siv = Cursive::default();
+    siv.set_fps(30);
 
     // We can quit by pressing `q`
     siv.add_global_callback('q', Cursive::quit);
 
     let view = AsyncView::new(&siv, || {
-        DelayView::new(TextView::new("Content loaded!"), 5)
+        DelayView::new(TextView::new("Content loaded!"), 30)
     });
 
     siv.add_fullscreen_layer(view);
