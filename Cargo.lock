@@ -106,6 +106,7 @@ name = "cursive-async-view"
 version = "0.1.0"
 dependencies = [
  "cursive 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "derive_builder 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "interpolation 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "voca_rs 1.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -149,6 +150,29 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "unreachable 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "derive_builder"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "darling 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "derive_builder_core 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "proc-macro2 0.4.30 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 0.6.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 0.15.39 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "derive_builder_core"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "darling 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "proc-macro2 0.4.30 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 0.6.12 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 0.15.39 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -884,6 +908,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum darling_core 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6afc018370c3bff3eb51f89256a6bdb18b4fdcda72d577982a14954a7a0b402c"
 "checksum darling_macro 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c6d8dac1c6f1d29a41c4712b4400f878cb4fcc4c7628f298dd75038e024998d1"
 "checksum debug_unreachable 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "9a032eac705ca39214d169f83e3d3da290af06d8d1d344d1baad2fd002dca4b3"
+"checksum derive_builder 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)" = "3ac53fa6a3cda160df823a9346442525dcaf1e171999a1cf23e67067e4fd64d4"
+"checksum derive_builder_core 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0288a23da9333c246bb18c143426074a6ae96747995c5819d2947b64cd942b37"
 "checksum dissolve 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "898542be4716d992082c8e4fc331b792d626cfa71cb2b4790f828b9a8f921a90"
 "checksum enum-map 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ccd9b2d5e0eb5c2ff851791e2af90ab4531b1168cfc239d1c0bf467e60ba3c89"
 "checksum enum-map-derive 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "153f6e8a8b2868e2fedf921b165f30229edcccb74d6a9bb1ccf0480ef61cd07e"

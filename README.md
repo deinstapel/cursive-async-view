@@ -17,6 +17,8 @@
 
 > This project is work-in-progress
 
+[![asciicast](https://asciinema.org/a/7it6fpLfpMp6DspyNOEPCVZQL.svg)](https://asciinema.org/a/7it6fpLfpMp6DspyNOEPCVZQL)
+
 ## How to use
 
 > TBD

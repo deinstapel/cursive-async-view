@@ -7,72 +7,72 @@ use cursive::views::{TextView};
 use cursive::utils::markup::StyledString;
 use interpolation::Ease;
 use voca_rs::chop;
-
-const CAR: &str = "
-    ▄█████████████▄
-   ▄██▀▀▀▀██▀▀▀▀████▄
-  ▄██▀    ██     ▀████▄
- ▄███▄▄▄▄▄██▄▄▄▄▄▄▄█████▄
-███████████████████████████▄
-████████████████████████████
-██████▀▀████████████▀▀██████
-▀▀▀██    ██▀▀▀▀▀▀██    ██▀▀▀
-   ███▄▄███      ███▄▄███
-     ▀▀▀▀          ▀▀▀▀
-";
-const CAR_WIDTH: usize = 28;
-const WIDTH: usize = 80;
+use derive_builder::Builder;
 
 /// Repeat the string `s` `n` times by concatenating.
 pub fn repeat_str<S: Into<String> + Clone>(s: S, n: usize) -> String {
     std::iter::repeat(s.into()).take(n).collect::<String>()
 }
 
-fn get_animation() -> Vec<StyledString> {
-    let width = WIDTH + CAR_WIDTH;
+fn default_animation(total_width: usize) -> Vec<StyledString> {
+    let mut frames = Vec::new();
+    let duration = 4 * 1000 / 30;
+    let durationf = duration as f64;
 
-    (0..width + 1)
-        .map(|x| {
-            let ip = if x as f64 <= width as f64 / 2.0 {
-                (x as f64 / (width as f64 / 2.0)).bounce_out() / 2.0
+    for idx in 0..duration + 1 {
+        let idxf = idx as f64;
+        let f = if idxf <= durationf / 2.0 {
+            (idxf / (durationf / 2.0)).quartic_in()
+        } else {
+            ((durationf - idxf) / (durationf / 2.0)).quartic_in()
+        };
+
+        let w = (f * total_width as f64 / 3.0) as usize;
+        let bar = format!(
+            "╭{}╮\n╰{}╯",
+            repeat_str("─", w),
+            repeat_str("─", w),
+        );
+
+        let mut result = StyledString::default();
+        let bar_width = w + 2;
+        let width = total_width + bar_width;
+
+        let g = (idxf / durationf).circular_in_out() * 2.0 % 1.0;
+        let pos = (g * width as f64) as usize;
+
+        for line in bar.lines() {
+            if pos == 0 || pos == width {
+                result.append_plain(format!(
+                    "{}\n",
+                    repeat_str(" ", total_width),
+                ));
+            } else if pos < bar_width {
+                result.append_plain(format!(
+                    "{}{}\n",
+                    chop::substr(line, bar_width - pos, 0),
+                    repeat_str(" ", width - pos - bar_width),
+                ));
+            } else if pos >= total_width {
+                result.append_plain(format!(
+                    "{}{}\n",
+                    repeat_str(" ", pos - bar_width),
+                    chop::substr(line, 0, bar_width - (pos - total_width)),
+                ));
             } else {
-                ((x - width / 2) as f64 / (width as f64 / 2.0)).bounce_in() / 2.0 + 1.0.quintic_out() / 2.0
-            };
-            (ip * width as f64) as usize
-        })
-        .map(|f| {
-            let mut result = StyledString::default();
-            for line in CAR.lines() {
-                if f == 0 || f == width{
-                    result.append_plain(format!(
-                        "{}\n",
-                        repeat_str(" ", WIDTH),
-                    ));
-                } else if f < CAR_WIDTH {
-                    result.append_plain(format!(
-                        "{}{}\n",
-                        chop::substr(line, CAR_WIDTH - f, 0),
-                        repeat_str(" ", width - f - CAR_WIDTH),
-                    ));
-                } else if f >= WIDTH {
-                    result.append_plain(format!(
-                        "{}{}\n",
-                        repeat_str(" ", f - CAR_WIDTH),
-                        chop::substr(line, 0, CAR_WIDTH - (f - WIDTH)),
-                    ));
-                } else {
-                    result.append_plain(format!(
-                        "{}{}{}\n",
-                        repeat_str(" ", f - CAR_WIDTH),
-                        line,
-                        repeat_str(" ", width - f - CAR_WIDTH),
-                    ));
-                }
+                result.append_plain(format!(
+                    "{}{}{}\n",
+                    repeat_str(" ", pos - bar_width),
+                    line,
+                    repeat_str(" ", width - pos - bar_width),
+                ));
             }
+        }
 
-            result
-        })
-        .collect::<Vec<_>>()
+        frames.push(result);
+    }
+
+    frames
 }
 
 pub struct DelayView<T: View> {
@@ -97,13 +97,54 @@ pub struct AsyncView<T: View + Send> {
     view: Option<T>,
     loading: TextView,
     animation: Vec<StyledString>,
+    animation_fn: Box<dyn Fn(usize) -> Vec<StyledString>>,
+    width: Option<usize>,
     pos: usize,
     rx: Receiver<T>,
 }
 
+#[derive(Default)]
+pub struct AsyncViewBuilder {
+    animation_fn: Option<Box<dyn Fn(usize) -> Vec<StyledString>>>,
+    width: Option<usize>,
+}
+
+impl AsyncViewBuilder {
+    pub fn animation_fn<VALUE: Into<Box<dyn Fn(usize) -> Vec<StyledString>>>>(
+        self,
+        value: VALUE,
+    ) -> Self {
+        let mut new = self;
+        new.animation_fn = Some(value.into());
+        new
+    }
+
+    pub fn width<VALUE: Into<usize>>(self, value: VALUE) -> Self {
+        let mut new = self;
+        new.width = Some(value.into());
+        new
+    }
+
+    pub fn build<F, T: View + Send>(self, siv: &Cursive, creator: F) -> AsyncView<T>
+    where
+        F: FnOnce() -> T + Send + 'static
+    {
+        AsyncView::new(
+            siv, creator,
+            self.width,
+            self.animation_fn.unwrap_or(Box::new(default_animation)),
+        )
+    }
+}
+
 impl<T: View + Send> AsyncView<T> {
     // TODO: add timeout parameter
-    pub fn new<F>(siv: &Cursive, creator: F) -> Self
+    fn new<F>(
+        siv: &Cursive,
+        creator: F,
+        width: Option<usize>,
+        animation_fn: Box<dyn Fn(usize) -> Vec<StyledString>>,
+    ) -> Self
     where
         F: FnOnce() -> T + Send + 'static
     {
@@ -114,11 +155,18 @@ impl<T: View + Send> AsyncView<T> {
             tx.send(creator()).unwrap();
             sink.send(Box::new(|_: &mut Cursive| {}))
         });
+        let animation = if let Some(width) = width {
+            animation_fn(width)
+        } else {
+            Vec::new()
+        };
 
         Self {
             view: None,
             loading: TextView::new(""),
-            animation: get_animation(),
+            animation,
+            animation_fn,
+            width,
             pos: 0,
             rx,
         }
@@ -162,6 +210,10 @@ impl<T: View + Send + Sized> View for AsyncView<T> {
             match self.rx.try_recv() {
                 Ok(view) => self.view = Some(view),
                 Err(_) => {},
+            }
+
+            if self.width.is_none() {
+                self.animation = (self.animation_fn)(constraint.x);
             }
         }
 
