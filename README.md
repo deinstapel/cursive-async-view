@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/async-view-loading.gif" height="256">
+</p>
+
 <h1 align="center">Welcome to cursive-async-view 👋</h1>
 <p align="center">
   <a href="https://travis-ci.org/deinstapel/cursive-async-view">
@@ -6,8 +10,11 @@
   <a href="https://github.com/deinstapel/cursive-async-view/blob/master/LICENSE">
     <img alt="GitHub" src="https://img.shields.io/github/license/deinstapel/cursive-async-view.svg">
   </a>
+  <a href="https://github.com/faressoft/terminalizer">
+    <img alt="terminalizer" src="https://img.shields.io/badge/GIF-terminalizer-blueviolet.svg">
+  </a>
   <a href="http://makeapullrequest.com">
-    <img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" target="_blank" />
+    <img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg">
   </a>
   <br>
   <i>A loading-screen wrapper for gyscos/cursive views</i>
@@ -16,8 +23,6 @@
 ---
 
 > This project is work-in-progress
-
-[![asciicast](https://asciinema.org/a/7it6fpLfpMp6DspyNOEPCVZQL.svg)](https://asciinema.org/a/7it6fpLfpMp6DspyNOEPCVZQL)
 
 ## How to use
 
