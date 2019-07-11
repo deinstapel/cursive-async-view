@@ -7,7 +7,6 @@ use cursive::views::{TextView};
 use cursive::utils::markup::StyledString;
 use interpolation::Ease;
 use voca_rs::chop;
-use derive_builder::Builder;
 
 /// Repeat the string `s` `n` times by concatenating.
 pub fn repeat_str<S: Into<String> + Clone>(s: S, n: usize) -> String {
