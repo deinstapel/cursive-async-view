@@ -76,7 +76,7 @@ fn main() {
         .width(40 as usize)
         .build(&siv, || {
             // costly construction of a new view
-            DelayView::new(TextView::new("Yay!\n\nThe content has loaded!               "), 30)
+            DelayView::new(TextView::new("Yay!\n\nThe content has loaded!               "), 10)
         });
 
     let dialog = Dialog::around(async_view)

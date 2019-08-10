@@ -57,6 +57,22 @@ fn default_animation(total_width: usize) -> Vec<StyledString> {
     frames
 }
 
+fn progress(total_width: usize, progress: f32) -> StyledString {
+    assert!(progress >= 0.0);
+    assert!(progress <= 1.0);
+
+    let foreground = PaletteColor::Highlight;
+    let background = PaletteColor::HighlightInactive;
+    let symbol = "━";
+
+    let end = (progress * total_width as f32) as usize;
+    let mut result = StyledString::new();
+    result.append_styled(repeat_str(symbol, end), foreground);
+    result.append_styled(repeat_str(symbol, total_width - end), background);
+
+    result
+}
+
 pub struct DelayView<T: View> {
     view: T,
 }
