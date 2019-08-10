@@ -154,6 +154,13 @@ impl<T: View + Send> AsyncView<T> {
             tx.send(creator()).unwrap();
             sink.send(Box::new(|_: &mut Cursive| {}))
         });
+        let other_sink = siv.cb_sink().clone();
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(33));
+                other_sink.send(Box::new(|_: &mut Cursive| {})).unwrap();
+            }
+        });
         let animation = if let Some(width) = width {
             animation_fn(width)
         } else {
