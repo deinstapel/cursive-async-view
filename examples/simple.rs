@@ -1,11 +1,9 @@
 extern crate cursive_async_view;
 
-use interpolation::Ease;
-use voca_rs::chop;
 use cursive::{self, Cursive, views::TextView, views::Dialog};
 use cursive_async_view::{DelayView, AsyncViewBuilder};
 
-const CAR: &str = "
+/*const CAR: &str = "
     ▄█████████████▄
    ▄██▀▀▀▀██▀▀▀▀████▄
   ▄██▀    ██     ▀████▄
@@ -19,7 +17,7 @@ const CAR: &str = "
 ";
 const CAR_WIDTH: usize = 28;
 
-/*fn get_animation() -> Vec<StyledString> {
+fn get_animation() -> Vec<StyledString> {
     let width = WIDTH + CAR_WIDTH;
 
     (0..width + 1)
@@ -78,7 +76,7 @@ fn main() {
         .width(40 as usize)
         .build(&siv, || {
             // costly construction of a new view
-            DelayView::new(TextView::new("Yay!\n\nThe content has loaded!               "), 5)
+            DelayView::new(TextView::new("Yay!\n\nThe content has loaded!               "), 30)
         });
 
     let dialog = Dialog::around(async_view)

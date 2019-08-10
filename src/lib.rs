@@ -5,8 +5,18 @@ use cursive::direction::Direction;
 use cursive::view::{View, ViewWrapper, Selector};
 use cursive::views::{TextView};
 use cursive::utils::markup::StyledString;
+use cursive::theme::PaletteColor;
 use interpolation::Ease;
-use voca_rs::chop;
+
+fn clamp(number: f64) -> f64 {
+    if number < 0.0 {
+        0.0
+    } else if number > 1.0 {
+        1.0
+    } else {
+        number
+    }
+}
 
 /// Repeat the string `s` `n` times by concatenating.
 pub fn repeat_str<S: Into<String> + Clone>(s: S, n: usize) -> String {
@@ -14,58 +24,31 @@ pub fn repeat_str<S: Into<String> + Clone>(s: S, n: usize) -> String {
 }
 
 fn default_animation(total_width: usize) -> Vec<StyledString> {
+    let foreground = PaletteColor::Highlight;
+    let background = PaletteColor::HighlightInactive;
+    let symbol = "━";
+
     let mut frames = Vec::new();
-    let duration = 4 * 1000 / 30;
+    let duration = 2 * 1000 / 30;
     let durationf = duration as f64;
 
     for idx in 0..duration + 1 {
         let idxf = idx as f64;
-        let f = if idxf <= durationf / 2.0 {
-            (idxf / (durationf / 2.0)).quartic_in()
-        } else {
-            ((durationf - idxf) / (durationf / 2.0)).quartic_in()
-        };
-
-        let w = (f * total_width as f64 / 3.0) as usize;
-        let bar = format!(
-            "╭{}╮\n╰{}╯",
-            repeat_str("─", w),
-            repeat_str("─", w),
-        );
+        let factor = idxf / durationf;
+        let begin_factor = clamp(((factor + 0.5) % 1.0).circular_in_out());
+        let end_factor = clamp(((factor + 0.75) % 1.0).circular_in_out() * 2.0);
+        let begin = (begin_factor * total_width as f64) as usize;
+        let end = (end_factor * total_width as f64) as usize;
 
         let mut result = StyledString::default();
-        let bar_width = w + 2;
-        let width = total_width + bar_width;
-
-        let g = (idxf / durationf).circular_in_out() * 2.0 % 1.0;
-        let pos = (g * width as f64) as usize;
-
-        for line in bar.lines() {
-            if pos == 0 || pos == width {
-                result.append_plain(format!(
-                    "{}\n",
-                    repeat_str(" ", total_width),
-                ));
-            } else if pos < bar_width {
-                result.append_plain(format!(
-                    "{}{}\n",
-                    chop::substr(line, bar_width - pos, 0),
-                    repeat_str(" ", width - pos - bar_width),
-                ));
-            } else if pos >= total_width {
-                result.append_plain(format!(
-                    "{}{}\n",
-                    repeat_str(" ", pos - bar_width),
-                    chop::substr(line, 0, bar_width - (pos - total_width)),
-                ));
-            } else {
-                result.append_plain(format!(
-                    "{}{}{}\n",
-                    repeat_str(" ", pos - bar_width),
-                    line,
-                    repeat_str(" ", width - pos - bar_width),
-                ));
-            }
+        if end >= begin {
+            result.append_styled(repeat_str(symbol, begin), background);
+            result.append_styled(repeat_str(symbol, end - begin), foreground);
+            result.append_styled(repeat_str(symbol, total_width - end), background);
+        } else {
+            result.append_styled(repeat_str(symbol, end), foreground);
+            result.append_styled(repeat_str(symbol, begin - end), background);
+            result.append_styled(repeat_str(symbol, total_width - begin), foreground);
         }
 
         frames.push(result);
