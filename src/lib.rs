@@ -6,16 +6,8 @@ use cursive::views::{TextView};
 use cursive::utils::markup::StyledString;
 use cursive::theme::PaletteColor;
 use interpolation::Ease;
-fn clamp(number: f64) -> f64 {
-    if number < 0.0 {
-        0.0
-    } else if number > 1.0 {
-        1.0
-    } else {
-        number
-    }
-}
 use crossbeam::channel::{Sender, Receiver, unbounded};
+use num::clamp;
 
 /// Repeat the string `s` `n` times by concatenating.
 pub fn repeat_str<S: Into<String> + Clone>(s: S, n: usize) -> String {
@@ -34,8 +26,8 @@ fn default_animation(total_width: usize) -> Vec<StyledString> {
     for idx in 0..duration + 1 {
         let idxf = idx as f64;
         let factor = idxf / durationf;
-        let begin_factor = clamp(((factor + 0.5) % 1.0).circular_in_out());
-        let end_factor = clamp(((factor + 0.75) % 1.0).circular_in_out() * 2.0);
+        let begin_factor = clamp(((factor + 0.5) % 1.0).circular_in_out(), 0.0, 1.0);
+        let end_factor = clamp(((factor + 0.75) % 1.0).circular_in_out() * 2.0, 0.0, 1.0);
         let begin = (begin_factor * total_width as f64) as usize;
         let end = (end_factor * total_width as f64) as usize;
 
@@ -94,7 +86,7 @@ pub struct AsyncProgressView<T: View + Send> {
     view: Option<T>,
     loading: TextView,
     animation_fn: Box<dyn Fn(usize, f32) -> StyledString>,
-    width: Option<usize>,
+    width: usize,
     rx_v: Receiver<T>,
     rx_p: Receiver<f32>,
 }
@@ -102,7 +94,7 @@ pub struct AsyncProgressView<T: View + Send> {
 impl <T: View + Send + Sized> AsyncProgressView<T> {
     pub fn new<F>(
         siv: &Cursive,
-        width: Option<usize>,
+        width: usize,
         creator: F
     ) -> Self
     where
@@ -111,6 +103,7 @@ impl <T: View + Send + Sized> AsyncProgressView<T> {
         let (sx_v, rx_v) = unbounded();
         let (sx_p, rx_p) = unbounded();
         let sink = siv.cb_sink().clone();
+        sx_p.send(0.0).unwrap();
         std::thread::spawn(move || {
             sx_v.send(creator(sx_p)).unwrap();
             sink.send(Box::new(|_: &mut Cursive| {}))
@@ -148,9 +141,7 @@ impl <T: View + Send + Sized> View for AsyncProgressView<T> {
         if self.view.is_none() {
             match self.rx_p.try_recv() {
                 Ok(v) => {
-                    if let Some(width) = self.width {
-                        self.loading.set_content((self.animation_fn)(width, v));
-                    }
+                    self.loading.set_content((self.animation_fn)(self.width, clamp(v, 0.0, 1.0)));
                 },
                 Err(_) => {},
             }
@@ -178,10 +169,6 @@ impl <T: View + Send + Sized> View for AsyncProgressView<T> {
             match self.rx_v.try_recv() {
                 Ok(view) => self.view = Some(view),
                 Err(_) => {},
-            }
-
-            if self.width.is_none() {
-                self.width = Some(constraint.x);
             }
         }
 
