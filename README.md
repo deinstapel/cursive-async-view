@@ -24,6 +24,19 @@
 
 > This project is work-in-progress
 
+## How does it look like?
+
+<details>
+  <summary>AsyncView Demo</summary>
+  <img src="assets/async-view-loading.gif" alt="async-view-loading demo">
+</details>
+
+
+<details>
+  <summary>AsyncViewProgress Demo</summary>
+  <img src="assets/async-view-progress.gif" alt="async-view-progress demo">
+</details>
+
 ## How to use
 
 > TBD

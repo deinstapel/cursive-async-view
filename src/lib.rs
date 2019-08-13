@@ -14,7 +14,7 @@ pub fn repeat_str<S: Into<String> + Clone>(s: S, n: usize) -> String {
     std::iter::repeat(s.into()).take(n).collect::<String>()
 }
 
-fn default_animation(total_width: usize) -> Vec<StyledString> {
+pub fn default_animation(total_width: usize) -> Vec<StyledString> {
     let foreground = PaletteColor::Highlight;
     let background = PaletteColor::HighlightInactive;
     let symbol = "━";
@@ -224,44 +224,9 @@ pub struct AsyncView<T: View + Send> {
     rx: Receiver<T>,
 }
 
-#[derive(Default)]
-pub struct AsyncViewBuilder {
-    animation_fn: Option<Box<dyn Fn(usize) -> Vec<StyledString>>>,
-    width: Option<usize>,
-}
-
-impl AsyncViewBuilder {
-    pub fn animation_fn<VALUE: Into<Box<dyn Fn(usize) -> Vec<StyledString>>>>(
-        self,
-        value: VALUE,
-    ) -> Self {
-        let mut new = self;
-        new.animation_fn = Some(value.into());
-        new
-    }
-
-    pub fn width<VALUE: Into<usize>>(self, value: VALUE) -> Self {
-        let mut new = self;
-        new.width = Some(value.into());
-        new
-    }
-
-    pub fn build<F, T: View + Send>(self, siv: &Cursive, creator: F) -> AsyncView<T>
-    where
-        F: FnOnce() -> T + Send + 'static
-    {
-        AsyncView::new(
-            siv, creator,
-            self.width,
-            self.animation_fn.unwrap_or(Box::new(default_animation)),
-        )
-    }
-}
-
-
 impl<T: View + Send> AsyncView<T> {
     // TODO: add timeout parameter
-    fn new<F>(
+    pub fn new<F>(
         siv: &Cursive,
         creator: F,
         width: Option<usize>,
@@ -284,11 +249,7 @@ impl<T: View + Send> AsyncView<T> {
                 other_sink.send(Box::new(|_: &mut Cursive| {})).unwrap();
             }
         });
-        let animation = if let Some(width) = width {
-            animation_fn(width)
-        } else {
-            Vec::new()
-        };
+        let animation = Vec::new();
 
         Self {
             view: None,
@@ -311,6 +272,11 @@ impl<T: View + Send + Sized> View for AsyncView<T> {
     }
 
     fn layout(&mut self, vec: Vec2) {
+        if let Some(width) = self.width {
+            self.animation = (self.animation_fn)(width)
+        } else {
+            self.animation = (self.animation_fn)(vec.x);
+        }
         self.loading.set_content(self.animation[self.pos].clone());
 
         // Here communication with receiving end of channel
@@ -341,10 +307,6 @@ impl<T: View + Send + Sized> View for AsyncView<T> {
             match self.rx.try_recv() {
                 Ok(view) => self.view = Some(view),
                 Err(_) => {},
-            }
-
-            if self.width.is_none() {
-                self.animation = (self.animation_fn)(constraint.x);
             }
         }
 

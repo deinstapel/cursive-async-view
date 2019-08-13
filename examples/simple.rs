@@ -1,7 +1,7 @@
 extern crate cursive_async_view;
 
 use cursive::{self, Cursive, views::TextView, views::Dialog};
-use cursive_async_view::{DelayView, AsyncViewBuilder};
+use cursive_async_view::{DelayView, AsyncView, default_animation};
 
 /*const CAR: &str = "
     ▄█████████████▄
@@ -72,12 +72,9 @@ fn main() {
     // We can quit by pressing `q`
     siv.add_global_callback('q', Cursive::quit);
 
-    let async_view = AsyncViewBuilder::default()
-        .width(40 as usize)
-        .build(&siv, || {
-            // costly construction of a new view
-            DelayView::new(TextView::new("Yay!\n\nThe content has loaded!               "), 10)
-        });
+    let async_view = AsyncView::new(&siv,move ||{
+        DelayView::new(TextView::new("Yay!\n\nThe content has loaded!               "), 10)
+    }, Some(40), Box::new(default_animation));
 
     let dialog = Dialog::around(async_view)
         .button("Ok", |s| s.quit());
