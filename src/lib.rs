@@ -1,6 +1,6 @@
-mod utils;
-mod progress;
 mod infinite;
+mod progress;
+mod utils;
 
-pub use progress::{AsyncProgressView, default_progress};
-pub use infinite::{AsyncView, default_animation};
+pub use infinite::{default_animation, AsyncView};
+pub use progress::{default_progress, AsyncProgressView};

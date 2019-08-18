@@ -1,13 +1,13 @@
 use std::thread;
 
-use cursive::{Cursive, Printer, Rect, Vec2};
-use cursive::event::{Event, EventResult, AnyCb};
+use crossbeam::channel::{self, Receiver, Sender};
 use cursive::direction::Direction;
-use cursive::view::{View, Selector};
-use cursive::views::{TextView};
-use cursive::utils::markup::StyledString;
+use cursive::event::{AnyCb, Event, EventResult};
 use cursive::theme::PaletteColor;
-use crossbeam::channel::{self, Sender, Receiver};
+use cursive::utils::markup::StyledString;
+use cursive::view::{Selector, View};
+use cursive::views::TextView;
+use cursive::{Cursive, Printer, Rect, Vec2};
 use num::clamp;
 
 use crate::utils;
@@ -38,10 +38,10 @@ pub struct AsyncProgressView<T: View + Send> {
     update_rx: Receiver<f32>,
 }
 
-impl <T: View + Send + Sized> AsyncProgressView<T> {
+impl<T: View + Send + Sized> AsyncProgressView<T> {
     pub fn new<F>(siv: &Cursive, creator: F) -> Self
     where
-        F: FnOnce(Sender<f32>) -> T + Send + 'static
+        F: FnOnce(Sender<f32>) -> T + Send + 'static,
     {
         let (view_tx, view_rx) = channel::unbounded();
         let (progress_tx, progress_rx) = channel::unbounded();
@@ -69,7 +69,7 @@ impl <T: View + Send + Sized> AsyncProgressView<T> {
                         Ok(value) => {
                             update_tx.send(value).unwrap();
                             update_sink.send(Box::new(|_: &mut Cursive| {})).ok();
-                        },
+                        }
                         Err(_) => break,
                     }
                 }
@@ -129,13 +129,13 @@ impl <T: View + Send + Sized> AsyncProgressView<T> {
 
     pub fn set_progress_fn<F>(&mut self, progress_fn: F)
     where
-        F: Fn(usize, usize, f32) -> StyledString + 'static
+        F: Fn(usize, usize, f32) -> StyledString + 'static,
     {
         self.progress_fn = Box::new(progress_fn);
     }
 }
 
-impl <T: View + Send + Sized> View for AsyncProgressView<T> {
+impl<T: View + Send + Sized> View for AsyncProgressView<T> {
     fn draw(&self, printer: &Printer) {
         match self.view {
             Some(ref view) => view.draw(printer),
@@ -161,7 +161,7 @@ impl <T: View + Send + Sized> View for AsyncProgressView<T> {
         if self.view.is_none() {
             match self.view_rx.try_recv() {
                 Ok(view) => self.view = Some(view),
-                Err(_) => {},
+                Err(_) => {}
             }
         }
 
@@ -176,7 +176,7 @@ impl <T: View + Send + Sized> View for AsyncProgressView<T> {
                 }
 
                 self.loading.required_size(constraint)
-            },
+            }
         }
     }
 

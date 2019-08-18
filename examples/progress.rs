@@ -1,8 +1,8 @@
 extern crate cursive_async_view;
 
-use cursive::{self, Cursive, views::TextView, views::Dialog};
-use cursive_async_view::{AsyncProgressView};
 use crossbeam::channel::Sender;
+use cursive::{self, views::Dialog, views::TextView, Cursive};
+use cursive_async_view::AsyncProgressView;
 
 fn main() {
     cursive::logger::init();
@@ -24,10 +24,10 @@ fn main() {
         std::thread::sleep(std::time::Duration::from_secs(1));
         s.send(1.0).unwrap();
         TextView::new("Yay, the content has loaded!")
-    }).with_width(40);
+    })
+    .with_width(40);
 
-    let dialog = Dialog::around(async_view)
-        .button("Ok", |s| s.quit());
+    let dialog = Dialog::around(async_view).button("Ok", |s| s.quit());
 
     siv.add_layer(dialog);
     siv.run();

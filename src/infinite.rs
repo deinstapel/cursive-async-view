@@ -1,15 +1,15 @@
 use std::thread;
 use std::time::Duration;
 
-use cursive::{Cursive, Printer, Rect, Vec2};
-use cursive::event::{Event, EventResult, AnyCb};
-use cursive::direction::Direction;
-use cursive::view::{View, Selector};
-use cursive::views::{TextView};
-use cursive::utils::markup::StyledString;
-use cursive::theme::PaletteColor;
-use interpolation::Ease;
 use crossbeam::channel::{self, Receiver};
+use cursive::direction::Direction;
+use cursive::event::{AnyCb, Event, EventResult};
+use cursive::theme::PaletteColor;
+use cursive::utils::markup::StyledString;
+use cursive::view::{Selector, View};
+use cursive::views::TextView;
+use cursive::{Cursive, Printer, Rect, Vec2};
+use interpolation::Ease;
 use num::clamp;
 
 use crate::utils;
@@ -66,7 +66,7 @@ impl<T: View + Send> AsyncView<T> {
     // TODO: add timeout parameter
     pub fn new<F>(siv: &Cursive, creator: F) -> Self
     where
-        F: FnOnce() -> T + Send + 'static
+        F: FnOnce() -> T + Send + 'static,
     {
         // trust me, I'm an engineer
         let sink = siv.cb_sink().clone();
@@ -128,11 +128,11 @@ impl<T: View + Send> AsyncView<T> {
 
     pub fn with_animation_fn<F>(self, animation_fn: F) -> Self
     where
-    // We cannot use a lifetime bound to the AsyncView struct because View has a
-    //  'static requirement. Therefore we have to make sure the animation_fn is
-    // 'static, meaning it owns all values and does not reference anything
-    // outside of its scope. In practice this means all animation_fn must be
-    // `move |width| {...}` or fn's.
+        // We cannot use a lifetime bound to the AsyncView struct because View has a
+        //  'static requirement. Therefore we have to make sure the animation_fn is
+        // 'static, meaning it owns all values and does not reference anything
+        // outside of its scope. In practice this means all animation_fn must be
+        // `move |width| {...}` or fn's.
         F: Fn(usize, usize, usize) -> AnimationFrame + 'static,
     {
         Self {
@@ -159,7 +159,7 @@ impl<T: View + Send> AsyncView<T> {
 
     pub fn set_animation_fn<F>(&mut self, animation_fn: F)
     where
-        F: Fn(usize, usize, usize) -> AnimationFrame + 'static
+        F: Fn(usize, usize, usize) -> AnimationFrame + 'static,
     {
         self.animation_fn = Box::new(animation_fn);
     }
@@ -191,7 +191,7 @@ impl<T: View + Send + Sized> View for AsyncView<T> {
         if self.view.is_none() {
             match self.rx.try_recv() {
                 Ok(view) => self.view = Some(view),
-                Err(_) => {},
+                Err(_) => {}
             }
         }
 
@@ -209,7 +209,7 @@ impl<T: View + Send + Sized> View for AsyncView<T> {
                 self.pos = next_frame_idx;
 
                 self.loading.required_size(constraint)
-            },
+            }
         }
     }
 
