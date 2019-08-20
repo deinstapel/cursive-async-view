@@ -14,11 +14,60 @@ use num::clamp;
 
 use crate::utils;
 
+/// This struct represents the content of a single loading animation frame,
+/// produced by a animation function of the `AsyncView`. Read the documentation
+/// of the `default_animation` to see how to implement your own animation function.
 pub struct AnimationFrame {
-    content: StyledString,
-    next_frame_idx: usize,
+    /// A `StyledString` that will be displayed inside a `TextView` for this frame.
+    pub content: StyledString,
+
+    /// The next `frame_idx` passed to the animation function when calculating
+    /// the next frame.
+    pub next_frame_idx: usize,
 }
 
+/// The default loading animation for a `AsyncView`.
+///
+/// # Creating your own loading function
+///
+/// As an example a very basic loading function would look like this:
+///
+/// ```
+/// use cursive::Cursive;
+/// use cursive::views::TextView;
+/// use cursive::utils::markup::StyledString;
+/// use cursive_async_view::{AsyncView, AnimationFrame};
+///
+/// fn my_loading_animation(
+///     _width: usize,
+///     _height: usize,
+///     frame_idx: usize,
+/// ) -> AnimationFrame {
+///     let content = if frame_idx < 30 {
+///         StyledString::plain("loading")
+///     } else {
+///         StyledString::plain("content")
+///     };
+///
+///     AnimationFrame {
+///         content,
+///         next_frame_idx: (frame_idx + 1) % 60,
+///     }
+/// }
+///
+/// let mut siv = Cursive::default();
+/// let async_view = AsyncView::new(&siv, move || {
+///     std::thread::sleep(std::time::Duration::from_secs(10));
+///     TextView::new("Yay!\n\nThe content has loaded!               ")
+/// })
+/// .with_animation_fn(my_loading_animation);
+/// ```
+///
+/// This animation function will first display `loading` for 1 second and then display
+/// `content` for 1 second.
+///
+/// The `width` and `height` parameters contain the maximum size the content may have
+/// (in characters). The initial `frame_idx` is 0.
 pub fn default_animation(width: usize, _height: usize, frame_idx: usize) -> AnimationFrame {
     let foreground = PaletteColor::Highlight;
     let background = PaletteColor::HighlightInactive;
@@ -144,16 +193,8 @@ impl<T: View + Send> AsyncView<T> {
         self.width = Some(width);
     }
 
-    pub fn inherit_width(&mut self) {
-        self.width = None;
-    }
-
     pub fn set_height(&mut self, height: usize) {
         self.height = Some(height);
-    }
-
-    pub fn inherit_height(&mut self) {
-        self.height = None;
     }
 
     pub fn set_animation_fn<F>(&mut self, animation_fn: F)
@@ -161,6 +202,14 @@ impl<T: View + Send> AsyncView<T> {
         F: Fn(usize, usize, usize) -> AnimationFrame + 'static,
     {
         self.animation_fn = Box::new(animation_fn);
+    }
+
+    pub fn inherit_width(&mut self) {
+        self.width = None;
+    }
+
+    pub fn inherit_height(&mut self) {
+        self.height = None;
     }
 }
 

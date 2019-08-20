@@ -12,6 +12,48 @@ use num::clamp;
 
 use crate::utils;
 
+/// The default progress animation for a `AsyncProgressView`.
+///
+/// # Creating your own progress function
+///
+/// As an example a very basic progress function would look like this:
+///
+/// ```
+/// use crossbeam::Sender;
+/// use cursive::Cursive;
+/// use cursive::views::TextView;
+/// use cursive::utils::markup::StyledString;
+/// use cursive_async_view::AsyncProgressView;
+///
+/// fn my_progress_function(
+///     _width: usize,
+///     _height: usize,
+///     progress: f32,
+/// ) -> StyledString {
+///     StyledString::plain(format!("{:.0}%", progress * 100.0))
+/// }
+///
+/// let mut siv = Cursive::default();
+/// let async_view = AsyncProgressView::new(&siv, |s: Sender<f32>| {
+///     std::thread::sleep(std::time::Duration::from_secs(1));
+///     s.send(0.2).unwrap();
+///     std::thread::sleep(std::time::Duration::from_secs(1));
+///     s.send(0.4).unwrap();
+///     std::thread::sleep(std::time::Duration::from_secs(1));
+///     s.send(0.6).unwrap();
+///     std::thread::sleep(std::time::Duration::from_secs(1));
+///     s.send(0.8).unwrap();
+///     std::thread::sleep(std::time::Duration::from_secs(1));
+///     s.send(1.0).unwrap();
+///     TextView::new("Yay, the content has loaded!")
+/// })
+/// .with_progress_fn(my_progress_function);
+/// ```
+///
+/// The progress function will display the progress in percent as a simple string.
+///
+/// The `width` and `height` parameters contain the maximum size the content may have
+/// (in characters). The `progress` parameter is guaranteed to be a `f32` between 0 and 1.
 pub fn default_progress(width: usize, _height: usize, progress: f32) -> StyledString {
     assert!(progress >= 0.0);
     assert!(progress <= 1.0);
@@ -115,16 +157,8 @@ impl<T: View + Send + Sized> AsyncProgressView<T> {
         self.width = Some(width);
     }
 
-    pub fn inherit_width(&mut self) {
-        self.width = None;
-    }
-
     pub fn set_height(&mut self, height: usize) {
         self.height = Some(height);
-    }
-
-    pub fn inherit_height(&mut self) {
-        self.height = None;
     }
 
     pub fn set_progress_fn<F>(&mut self, progress_fn: F)
@@ -132,6 +166,14 @@ impl<T: View + Send + Sized> AsyncProgressView<T> {
         F: Fn(usize, usize, f32) -> StyledString + 'static,
     {
         self.progress_fn = Box::new(progress_fn);
+    }
+
+    pub fn inherit_width(&mut self) {
+        self.width = None;
+    }
+
+    pub fn inherit_height(&mut self) {
+        self.height = None;
     }
 }
 
