@@ -58,7 +58,7 @@ pub struct AnimationFrame {
 /// let mut siv = Cursive::default();
 /// let async_view = AsyncView::new(&siv, move || {
 ///     std::thread::sleep(std::time::Duration::from_secs(10));
-///     TextView::new("Yay!\n\nThe content has loaded!               ")
+///     TextView::new("Yay!\n\nThe content has loaded!")
 /// })
 /// .with_animation_fn(my_loading_animation);
 /// ```
@@ -101,6 +101,45 @@ pub fn default_animation(width: usize, _height: usize, frame_idx: usize) -> Anim
     }
 }
 
+/// An `AsyncView` is a wrapper view that displays a loading screen, until the child
+/// view is successfully created. The creation of the inner view is done on a
+/// dedicated thread. Therefore, it is necessary for the creation function to
+/// always return, otherwise the thread will get stuck.
+///
+/// # Example usage
+///
+/// ```
+/// use cursive::{views::TextView, Cursive};
+/// use cursive_async_view::AsyncView;
+///
+/// let mut siv = Cursive::default();
+/// let async_view = AsyncView::new(&siv, move || {
+///     std::thread::sleep(std::time::Duration::from_secs(10));
+///     TextView::new("Yay!\n\nThe content has loaded!")
+/// });
+///
+/// siv.add_layer(async_view);
+/// // siv.run();
+/// ```
+///
+/// The content will be displayed after 10 seconds.
+///
+/// # Threads
+///
+/// The `new(siv, creator)` method will spawn 2 threads:
+///
+/// 1. `cursive-async-view::creator` The creation thread for the wrapped view.
+///    This thread will stop running as soon as the creation function returned.
+/// 2. `cursive-async-view::updater` The update thread for ensuring 30fps during
+///    the loading animation. This thread will be stopped by `AsyncView` when the
+///    creation function returned and the new view is available for layouting.
+///
+/// The threads are labeled as indicated above.
+///
+/// # TODO
+///
+/// * make creation function return a result to mark an unsuccessful creation
+///
 pub struct AsyncView<T: View + Send> {
     view: Option<T>,
     loading: TextView,
@@ -112,6 +151,14 @@ pub struct AsyncView<T: View + Send> {
 }
 
 impl<T: View + Send> AsyncView<T> {
+    /// Create a new `AsyncView` instance. The cursive reference is only used
+    /// to control the refresh rate of the terminal when the loading animation
+    /// is running. In order to show the view, it has to be directly or indirectly
+    /// added to a cursive layer like any other view.
+    ///
+    /// The creator function will be executed on a dedicated thread in the
+    /// background. Make sure that this function will never block indefinitely.
+    /// Otherwise, the creation thread will get stuck.
     pub fn new<F>(siv: &Cursive, creator: F) -> Self
     where
         F: FnOnce() -> T + Send + 'static,
@@ -160,6 +207,8 @@ impl<T: View + Send> AsyncView<T> {
         }
     }
 
+    /// Mark the maximum allowed width in characters, the loading animation may consume.
+    /// By default, the width will be inherited by the parent view.
     pub fn with_width(self, width: usize) -> Self {
         Self {
             width: Some(width),
@@ -167,6 +216,8 @@ impl<T: View + Send> AsyncView<T> {
         }
     }
 
+    /// Mark the maximum allowed height in characters, the loading animation may consume.
+    /// By default, the height will be inherited by the parent view.
     pub fn with_height(self, height: usize) -> Self {
         Self {
             height: Some(height),
@@ -174,6 +225,9 @@ impl<T: View + Send> AsyncView<T> {
         }
     }
 
+    /// Set a custom animation function for this view, indicating that the wrapped view is
+    /// not available yet. See the `default_animation` function reference for an example on
+    /// how to create a custom animation function.
     pub fn with_animation_fn<F>(self, animation_fn: F) -> Self
     where
         // We cannot use a lifetime bound to the AsyncView struct because View has a
@@ -184,30 +238,44 @@ impl<T: View + Send> AsyncView<T> {
         F: Fn(usize, usize, usize) -> AnimationFrame + 'static,
     {
         Self {
+            pos: 0,
             animation_fn: Box::new(animation_fn),
             ..self
         }
     }
 
+    /// Set the maximum allowed width in characters, the loading animation may consume.
     pub fn set_width(&mut self, width: usize) {
         self.width = Some(width);
     }
 
+    /// Set the maximum allowed height in characters, the loading animation may consume.
     pub fn set_height(&mut self, height: usize) {
         self.height = Some(height);
     }
 
+    /// Set a custom animation function for this view, indicating that the wrapped view is
+    /// not available yet. See the `default_animation` function reference for an example on
+    /// how to create a custom animation function.
+    ///
+    /// This function may be set at any time. The loading animation can be changed even if
+    /// the previous loading animation has already started.
+    ///
+    /// > The `frame_idx` of the loading animation is reset to 0 when setting a new animation function
     pub fn set_animation_fn<F>(&mut self, animation_fn: F)
     where
         F: Fn(usize, usize, usize) -> AnimationFrame + 'static,
     {
+        self.pos = 0;
         self.animation_fn = Box::new(animation_fn);
     }
 
+    /// Make the loading animation inherit its width from the parent view. This is the default.
     pub fn inherit_width(&mut self) {
         self.width = None;
     }
 
+    /// Make the loading animation inherit its height from the parent view. This is the default.
     pub fn inherit_height(&mut self) {
         self.height = None;
     }

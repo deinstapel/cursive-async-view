@@ -70,6 +70,54 @@ pub fn default_progress(width: usize, _height: usize, progress: f32) -> StyledSt
     result
 }
 
+/// An `AsyncProgressView` is a wrapper view that displays a progress bar, until the
+/// child view is successfully created. The creation of the inner view is done on a
+/// dedicated thread. Therefore, it is necessary for the creation function to always
+/// return, otherwise the thread will get stuck.
+///
+/// # Example usage
+///
+/// ```
+/// use crossbeam::Sender;
+/// use cursive::{views::TextView, Cursive};
+/// use cursive_async_view::AsyncProgressView;
+///
+/// let mut siv = Cursive::default();
+/// let async_view = AsyncProgressView::new(&siv, |s: Sender<f32>| {
+///     std::thread::sleep(std::time::Duration::from_secs(1));
+///     s.send(0.2).unwrap();
+///     std::thread::sleep(std::time::Duration::from_secs(1));
+///     s.send(0.4).unwrap();
+///     std::thread::sleep(std::time::Duration::from_secs(1));
+///     s.send(0.6).unwrap();
+///     std::thread::sleep(std::time::Duration::from_secs(1));
+///     s.send(0.8).unwrap();
+///     std::thread::sleep(std::time::Duration::from_secs(1));
+///     s.send(1.0).unwrap();
+///     TextView::new("Yay, the content has loaded!")
+/// });
+///
+/// siv.add_layer(async_view);
+/// // siv.run();
+/// ```
+///
+/// # Threads
+///
+/// The `new(siv, creator)` method will spawn 2 threads:
+///
+/// 1. `cursive-async-view::creator` The creation thread for the wrapped view.
+///    This thread will stop running as soon as the creation function returned.
+/// 2. `cursive-async-view::updater` The update thread waits for the creation
+///    function to signal progress and will be stopped by `AsyncProgressView`
+///    when the creation function returned and the new view is available for
+///    layouting.
+///
+/// The threads are labeled as indicated above.
+///
+/// # TODO
+///
+/// * make creation function return a result to mark an unsuccessful creation
+///
 pub struct AsyncProgressView<T: View + Send> {
     view: Option<T>,
     loading: TextView,
@@ -81,6 +129,13 @@ pub struct AsyncProgressView<T: View + Send> {
 }
 
 impl<T: View + Send + Sized> AsyncProgressView<T> {
+    /// Create a new `AsyncProgressView` instance. The cursive reference is only used to
+    /// update the screen when a progress update is received. In order to show the view,
+    /// it has to be directly or indirectly added to a cursive layer like any other view.
+    ///
+    /// The creator function will be executed on a dedicated thread in the background.
+    /// Make sure that this function will never block indefinitely. Otherwise, the
+    /// creation thread will get stuck.
     pub fn new<F>(siv: &Cursive, creator: F) -> Self
     where
         F: FnOnce(Sender<f32>) -> T + Send + 'static,
@@ -129,6 +184,8 @@ impl<T: View + Send + Sized> AsyncProgressView<T> {
         }
     }
 
+    /// Mark the maximum allowed width in characters, the progress bar may consume.
+    /// By default, the width will be inherited by the parent view.
     pub fn with_width(self, width: usize) -> Self {
         Self {
             width: Some(width),
@@ -136,6 +193,8 @@ impl<T: View + Send + Sized> AsyncProgressView<T> {
         }
     }
 
+    /// Mark the maximum allowed height in characters, the progress bar may consume.
+    /// By default, the height will be inherited by the parent view.
     pub fn with_height(self, height: usize) -> Self {
         Self {
             height: Some(height),
@@ -143,6 +202,9 @@ impl<T: View + Send + Sized> AsyncProgressView<T> {
         }
     }
 
+    /// Set a custom progress function for this view, indicating the progress of the
+    /// wrapped view creation. See the `default_progress` function reference for an
+    /// example on how to create a custom progress function.
     pub fn with_progress_fn<F>(self, progress_fn: F) -> Self
     where
         F: Fn(usize, usize, f32) -> StyledString + 'static,
@@ -153,14 +215,22 @@ impl<T: View + Send + Sized> AsyncProgressView<T> {
         }
     }
 
+    /// Set the maximum allowed width in characters, the progress bar may consume.
     pub fn set_width(&mut self, width: usize) {
         self.width = Some(width);
     }
 
+    /// Set the maximum allowed height in characters, the progress bar may consume.
     pub fn set_height(&mut self, height: usize) {
         self.height = Some(height);
     }
 
+    /// Set a custom progress function for this view, indicating the progress of the
+    /// wrapped view creation. See the `default_progress` function reference for an
+    /// example on how to create a custom progress function.
+    ///
+    /// The function may be set at any time. The progress bar can be changed even if
+    /// the previous progress bar has already be drawn.
     pub fn set_progress_fn<F>(&mut self, progress_fn: F)
     where
         F: Fn(usize, usize, f32) -> StyledString + 'static,
@@ -168,10 +238,12 @@ impl<T: View + Send + Sized> AsyncProgressView<T> {
         self.progress_fn = Box::new(progress_fn);
     }
 
+    /// Make the progress bar inherit its width from the parent view. This is the default.
     pub fn inherit_width(&mut self) {
         self.width = None;
     }
 
+    /// Make the progress bar inherit its height from the parent view. This is the default.
     pub fn inherit_height(&mut self) {
         self.height = None;
     }
