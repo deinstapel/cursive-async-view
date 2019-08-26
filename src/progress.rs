@@ -9,7 +9,6 @@ use cursive::view::{Selector, View};
 use cursive::views::TextView;
 use cursive::{Cursive, Printer, Rect, Vec2};
 use num::clamp;
-use bounded_spsc_queue::{make, Consumer};
 
 use crate::utils;
 
@@ -125,7 +124,7 @@ pub struct AsyncProgressView<T: View + Send> {
     progress_fn: Box<dyn Fn(usize, usize, f32) -> StyledString + 'static>,
     width: Option<usize>,
     height: Option<usize>,
-    view_rx: Consumer<T>,
+    view_rx: Receiver<T>,
     update_rx: Receiver<f32>,
 }
 
@@ -141,17 +140,16 @@ impl<T: View + Send + Sized> AsyncProgressView<T> {
     where
         F: FnOnce(Sender<f32>) -> T + Send + 'static,
     {
+        let (view_tx, view_rx) = channel::unbounded();
         let (progress_tx, progress_rx) = channel::unbounded();
         let (update_tx, update_rx) = channel::unbounded();
-        // We use this channel exactly once, so we can use a bounded one
-        let (view_tx, view_rx) = make(1);
         let sink = siv.cb_sink().clone();
 
         thread::Builder::new()
             .name(format!("cursive-async-view::creator"))
             .spawn(move || {
                 progress_tx.send(0.0).unwrap();
-                view_tx.push(creator(progress_tx));
+                view_tx.send(creator(progress_tx)).unwrap();
 
                 // update the layout when the new view is available
                 sink.send(Box::new(|_: &mut Cursive| {})).ok();
@@ -275,9 +273,9 @@ impl<T: View + Send + Sized> View for AsyncProgressView<T> {
 
     fn required_size(&mut self, constraint: Vec2) -> Vec2 {
         if self.view.is_none() {
-            match self.view_rx.try_pop() {
-                Some(view) => self.view = Some(view),
-                None => {}
+            match self.view_rx.try_recv() {
+                Ok(view) => self.view = Some(view),
+                Err(_) => {}
             }
         }
 

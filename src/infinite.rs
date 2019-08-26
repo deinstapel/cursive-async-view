@@ -1,6 +1,7 @@
 use std::thread;
 use std::time::Duration;
 
+use crossbeam::channel::{self, Receiver};
 use cursive::direction::Direction;
 use cursive::event::{AnyCb, Event, EventResult};
 use cursive::theme::PaletteColor;
@@ -10,7 +11,6 @@ use cursive::views::TextView;
 use cursive::{Cursive, Printer, Rect, Vec2};
 use interpolation::Ease;
 use num::clamp;
-use bounded_spsc_queue::{make, Consumer};
 
 use crate::utils;
 
@@ -147,7 +147,7 @@ pub struct AsyncView<T: View + Send> {
     width: Option<usize>,
     height: Option<usize>,
     pos: usize,
-    rx: Consumer<T>,
+    rx: Receiver<T>,
 }
 
 impl<T: View + Send> AsyncView<T> {
@@ -165,16 +165,15 @@ impl<T: View + Send> AsyncView<T> {
     {
         // trust me, I'm an engineer
         let sink = siv.cb_sink().clone();
-        // We use this channel exactly once, so a bounded channel can be used
-        let (tx, rx) = make(1);
-        let (update_tx, update_rx) = make(1);
+        let (tx, rx) = channel::unbounded();
+        let (update_tx, update_rx) = channel::unbounded();
 
         // creation thread for async view
         thread::Builder::new()
             .name(format!("cursive-async-view::creator"))
             .spawn(move || {
-                tx.push(creator());
-                update_tx.push(true);
+                tx.send(creator()).unwrap();
+                update_tx.send(true).unwrap();
 
                 // trigger relayout when new view is available
                 sink.send(Box::new(|_: &mut Cursive| {}))
@@ -187,12 +186,10 @@ impl<T: View + Send> AsyncView<T> {
             .name(format!("cursive-async-view::updater"))
             .spawn(move || {
                 loop {
-                    if update_rx.try_pop().is_some() {
-                        // flippity flop, WE need to stop
+                    if update_rx.recv_timeout(Duration::from_millis(33)).is_ok() {
+                        // flippity flop, I need to stop
                         break;
                     }
-                    // if not wait a bit
-                    thread::sleep(Duration::from_millis(33));
 
                     update_sink.send(Box::new(|_: &mut Cursive| {})).unwrap();
                 }
@@ -308,9 +305,9 @@ impl<T: View + Send + Sized> View for AsyncView<T> {
 
     fn required_size(&mut self, constraint: Vec2) -> Vec2 {
         if self.view.is_none() {
-            match self.rx.try_pop() {
-                Some(view) => self.view = Some(view),
-                None => {}
+            match self.rx.try_recv() {
+                Ok(view) => self.view = Some(view),
+                Err(_) => {}
             }
         }
 
