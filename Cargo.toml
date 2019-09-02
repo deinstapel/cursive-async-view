@@ -1,14 +1,13 @@
 [package]
 name = "cursive-async-view"
 version = "0.1.2-alpha.0"
-authors = ["Fin Christensen <christensen.fin@gmail.com>"]
+authors = ["Fin Christensen <christensen.fin@gmail.com>", "Johannes Wünsche <johannes.wuensche97@gmail.com>"]
 edition = "2018"
 description = "A loading-screen wrapper for gyscos/cursive views"
 license = "BSD-3-Clause"
 readme = "README.md"
 keywords = ["cursive-views", "cursive", "loading", "progress", "terminal"]
 repository = "https://github.com/deinstapel/cursive-async-view"
-homepage = "https://github.com/deinstapel/cursive-async-view"
 documentation = "https://docs.rs/cursive-async-view"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
