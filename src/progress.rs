@@ -136,7 +136,7 @@ impl<T: View + Send + Sized> AsyncProgressView<T> {
     /// The creator function will be executed on a dedicated thread in the background.
     /// Make sure that this function will never block indefinitely. Otherwise, the
     /// creation thread will get stuck.
-    pub fn new<F>(siv: &Cursive, creator: F) -> Self
+    pub fn new<F>(siv: &Cursive) -> Self
     where
         F: FnOnce(Sender<f32>) -> T + Send + 'static,
     {

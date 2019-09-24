@@ -1,7 +1,7 @@
 use std::thread;
 use std::time::Duration;
 
-use crossbeam::channel::{self, Receiver};
+use crossbeam::channel::{self, Sender, Receiver, TryRecvError};
 use cursive::direction::Direction;
 use cursive::event::{AnyCb, Event, EventResult};
 use cursive::theme::PaletteColor;
@@ -11,6 +11,7 @@ use cursive::views::TextView;
 use cursive::{Cursive, Printer, Rect, Vec2};
 use interpolation::Ease;
 use num::clamp;
+use failure::Fail;
 
 use crate::utils;
 
@@ -101,6 +102,34 @@ pub fn default_animation(width: usize, _height: usize, frame_idx: usize) -> Anim
     }
 }
 
+#[derive(Debug, Fail)]
+pub enum HandleError {
+    #[fail(display = "The async view receiving the loaded view is not available (e.g. already dropped)")]
+    ViewNotAvailable,
+}
+
+pub struct AsyncHandle<V: View> {
+    // TODO: use a sender reference here to force the handle user to be on the same thread as the async-view. Also, this would eliminate the ViewNotAvailable error as the compiler could check for the lifetime.
+    chan: Sender<HandleMsg<V>>,
+}
+
+pub enum HandleMsg<V: View> {
+    Loaded(V),
+    Error(String),
+}
+
+impl<V: View> AsyncHandle<V> {
+    pub fn loaded(self, view: V) -> Result<(), HandleError> {
+        self.chan.send(HandleMsg::Loaded(view))
+            .map_err(|_| HandleError::ViewNotAvailable)
+    }
+
+    pub fn error<S: Into<String>>(self, msg: S) -> Result<(), HandleError> {
+        self.chan.send(HandleMsg::Error(msg.into()))
+            .map_err(|_| HandleError::ViewNotAvailable)
+    }
+}
+
 /// An `AsyncView` is a wrapper view that displays a loading screen, until the child
 /// view is successfully created. The creation of the inner view is done on a
 /// dedicated thread. Therefore, it is necessary for the creation function to
@@ -147,7 +176,8 @@ pub struct AsyncView<T: View> {
     width: Option<usize>,
     height: Option<usize>,
     pos: usize,
-    rx: Receiver<T>,
+    rx: Receiver<HandleMsg<T>>,
+    tx: Sender<HandleMsg<T>>,
 }
 
 impl<T: View> AsyncView<T> {
@@ -159,44 +189,12 @@ impl<T: View> AsyncView<T> {
     /// The creator function will be executed on a dedicated thread in the
     /// background. Make sure that this function will never block indefinitely.
     /// Otherwise, the creation thread will get stuck.
-    pub fn new<F>(siv: &Cursive, creator: F) -> Self
-    where
-        F: Send + FnOnce() -> T + 'static,
+    pub fn new<F>(siv: &Cursive) -> Self
     {
         // trust me, I'm an engineer
-        let sink = siv.cb_sink().clone();
         let (tx, rx) = channel::unbounded();
-        let (update_tx, update_rx) = channel::unbounded();
 
-        // creation thread for async view
-        thread::Builder::new()
-            .name(format!("cursive-async-view::creator"))
-            .spawn(move || {
-                let view = creator();
-
-                tx.send(view).unwrap();
-                update_tx.send(true).unwrap();
-
-                // trigger relayout when new view is available
-                sink.send(Box::new(|_: &mut Cursive| {}))
-            })
-            .unwrap();
-
-        let update_sink = siv.cb_sink().clone();
-        // view update thread targeting 30fps
-        thread::Builder::new()
-            .name(format!("cursive-async-view::updater"))
-            .spawn(move || {
-                loop {
-                    if update_rx.recv_timeout(Duration::from_millis(33)).is_ok() {
-                        // flippity flop, I need to stop
-                        break;
-                    }
-
-                    update_sink.send(Box::new(|_: &mut Cursive| {})).unwrap();
-                }
-            })
-            .unwrap();
+        //siv.cb_sink().send(Box::new(Self::waiting_cb));
 
         Self {
             view: None,
@@ -206,6 +204,31 @@ impl<T: View> AsyncView<T> {
             height: None,
             pos: 0,
             rx,
+            tx,
+        }
+    }
+
+    fn waiting_cb(&self, siv: &mut Cursive) {
+        match self.rx.try_recv() {
+            Ok(HandleMsg::Loaded(view)) => {
+                self.view = Some(view);
+            },
+            Ok(HandleMsg::Error(msg)) => {
+                // FIXME: a error animation fn must be added incorporating the message
+            },
+            Err(TryRecvError::Empty) => {
+                // let's try again later
+                // FIXME: ensure 30 fps
+                // BROKEN: CbSink needs the callback to be `Send`
+                //   Although, Cursive itself does not need the
+                //   cb to be `Send`, the restriction exists to enable
+                //   users to use the CbSink from other threads.
+                //   Looking for a solution right now...
+                siv.cb_sink().send(Box::new(|siv| {
+                    Self::waiting_cb(self, siv)
+                }));
+            },
+            Err(TryRecvError::Disconnected) => unreachable!(),
         }
     }
 
