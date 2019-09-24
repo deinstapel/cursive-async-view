@@ -140,7 +140,7 @@ pub fn default_animation(width: usize, _height: usize, frame_idx: usize) -> Anim
 ///
 /// * make creation function return a result to mark an unsuccessful creation
 ///
-pub struct AsyncView<T: View + Send> {
+pub struct AsyncView<T: View> {
     view: Option<T>,
     loading: TextView,
     animation_fn: Box<dyn Fn(usize, usize, usize) -> AnimationFrame + 'static>,
@@ -150,7 +150,7 @@ pub struct AsyncView<T: View + Send> {
     rx: Receiver<T>,
 }
 
-impl<T: View + Send> AsyncView<T> {
+impl<T: View> AsyncView<T> {
     /// Create a new `AsyncView` instance. The cursive reference is only used
     /// to control the refresh rate of the terminal when the loading animation
     /// is running. In order to show the view, it has to be directly or indirectly
@@ -161,7 +161,7 @@ impl<T: View + Send> AsyncView<T> {
     /// Otherwise, the creation thread will get stuck.
     pub fn new<F>(siv: &Cursive, creator: F) -> Self
     where
-        F: FnOnce() -> T + Send + 'static,
+        F: Send + FnOnce() -> T + 'static,
     {
         // trust me, I'm an engineer
         let sink = siv.cb_sink().clone();
@@ -172,7 +172,9 @@ impl<T: View + Send> AsyncView<T> {
         thread::Builder::new()
             .name(format!("cursive-async-view::creator"))
             .spawn(move || {
-                tx.send(creator()).unwrap();
+                let view = creator();
+
+                tx.send(view).unwrap();
                 update_tx.send(true).unwrap();
 
                 // trigger relayout when new view is available
@@ -281,7 +283,7 @@ impl<T: View + Send> AsyncView<T> {
     }
 }
 
-impl<T: View + Send + Sized> View for AsyncView<T> {
+impl<T: View + Sized> View for AsyncView<T> {
     fn draw(&self, printer: &Printer) {
         match self.view {
             Some(ref view) => view.draw(printer),
