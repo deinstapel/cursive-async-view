@@ -14,7 +14,7 @@ fn main() {
     siv.add_global_callback('q', Cursive::quit);
 
     let time = Instant::now();
-    let async_view = AsyncView::new(&mut siv, move |_siv| {
+    let async_view = AsyncView::new(&mut siv, move || {
         if time + Duration::from_secs(5) < Instant::now() {
             AsyncState::Loaded(
                 Button::new("Yay! The content has loaded!", |_| {}).disabled()

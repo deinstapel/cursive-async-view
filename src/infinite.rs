@@ -167,7 +167,7 @@ impl<T: View> AsyncView<T> {
     /// background. Make sure that this function will never block indefinitely.
     /// Otherwise, the creation thread will get stuck.
     pub fn new<F>(siv: &mut Cursive, creator: F) -> Self
-        where F: Fn(&mut Cursive) -> AsyncState<T> + 'static
+        where F: Fn() -> AsyncState<T> + 'static
     {
         // trust me, I'm an engineer
         let (tx, rx) = channel::unbounded();
@@ -186,9 +186,9 @@ impl<T: View> AsyncView<T> {
     }
 
     fn polling_cb<F>(siv: &mut Cursive, chan: SendWrapper<Sender<AsyncState<T>>>, cb: F)
-        where F: Fn(&mut Cursive) -> AsyncState<T> + 'static
+        where F: Fn() -> AsyncState<T> + 'static
     {
-        match cb(siv) {
+        match cb() {
             AsyncState::Pending => {
                 let sink = siv.cb_sink().clone();
                 let cb = SendWrapper::new(cb);
@@ -201,8 +201,6 @@ impl<T: View> AsyncView<T> {
                 chan.send(state).unwrap();
             }
         }
-
-
     }
 
     /// Mark the maximum allowed width in characters, the loading animation may consume.
