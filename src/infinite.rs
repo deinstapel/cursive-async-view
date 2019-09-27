@@ -1,6 +1,3 @@
-use std::thread;
-use std::time::Duration;
-
 use crossbeam::channel::{self, Sender, Receiver, TryRecvError};
 use cursive::direction::Direction;
 use cursive::event::{AnyCb, Event, EventResult};
@@ -12,6 +9,7 @@ use cursive::{Cursive, Printer, Rect, Vec2};
 use interpolation::Ease;
 use num::clamp;
 use failure::Fail;
+use send_wrapper::SendWrapper;
 
 use crate::utils;
 
@@ -110,22 +108,23 @@ pub enum HandleError {
 
 pub struct AsyncHandle<V: View> {
     // TODO: use a sender reference here to force the handle user to be on the same thread as the async-view. Also, this would eliminate the ViewNotAvailable error as the compiler could check for the lifetime.
-    chan: Sender<HandleMsg<V>>,
+    chan: Sender<AsyncState<V>>,
 }
 
-pub enum HandleMsg<V: View> {
+enum AsyncState<V: View> {
     Loaded(V),
     Error(String),
+    Pending,
 }
 
 impl<V: View> AsyncHandle<V> {
     pub fn loaded(self, view: V) -> Result<(), HandleError> {
-        self.chan.send(HandleMsg::Loaded(view))
+        self.chan.send(AsyncState::Loaded(view))
             .map_err(|_| HandleError::ViewNotAvailable)
     }
 
     pub fn error<S: Into<String>>(self, msg: S) -> Result<(), HandleError> {
-        self.chan.send(HandleMsg::Error(msg.into()))
+        self.chan.send(AsyncState::Error(msg.into()))
             .map_err(|_| HandleError::ViewNotAvailable)
     }
 }
@@ -170,14 +169,14 @@ impl<V: View> AsyncHandle<V> {
 /// * make creation function return a result to mark an unsuccessful creation
 ///
 pub struct AsyncView<T: View> {
-    view: Option<T>,
+    view: AsyncState<T>,
     loading: TextView,
     animation_fn: Box<dyn Fn(usize, usize, usize) -> AnimationFrame + 'static>,
     width: Option<usize>,
     height: Option<usize>,
     pos: usize,
-    rx: Receiver<HandleMsg<T>>,
-    tx: Sender<HandleMsg<T>>,
+    tx: Sender<AsyncState<T>>,
+    rx: Receiver<AsyncState<T>>,
 }
 
 impl<T: View> AsyncView<T> {
@@ -189,15 +188,15 @@ impl<T: View> AsyncView<T> {
     /// The creator function will be executed on a dedicated thread in the
     /// background. Make sure that this function will never block indefinitely.
     /// Otherwise, the creation thread will get stuck.
-    pub fn new<F>(siv: &Cursive) -> Self
+    pub fn new(siv: &Cursive) -> Self
     {
         // trust me, I'm an engineer
         let (tx, rx) = channel::unbounded();
 
-        //siv.cb_sink().send(Box::new(Self::waiting_cb));
+        //Self::waiting_cb(siv);
 
         Self {
-            view: None,
+            view: AsyncState::Pending,
             loading: TextView::new(""),
             animation_fn: Box::new(default_animation),
             width: None,
@@ -208,28 +207,14 @@ impl<T: View> AsyncView<T> {
         }
     }
 
-    fn waiting_cb(&self, siv: &mut Cursive) {
-        match self.rx.try_recv() {
-            Ok(HandleMsg::Loaded(view)) => {
-                self.view = Some(view);
-            },
-            Ok(HandleMsg::Error(msg)) => {
-                // FIXME: a error animation fn must be added incorporating the message
-            },
-            Err(TryRecvError::Empty) => {
-                // let's try again later
-                // FIXME: ensure 30 fps
-                // BROKEN: CbSink needs the callback to be `Send`
-                //   Although, Cursive itself does not need the
-                //   cb to be `Send`, the restriction exists to enable
-                //   users to use the CbSink from other threads.
-                //   Looking for a solution right now...
-                siv.cb_sink().send(Box::new(|siv| {
-                    Self::waiting_cb(self, siv)
-                }));
-            },
-            Err(TryRecvError::Disconnected) => unreachable!(),
-        }
+    pub fn handle(&self) -> SendWrapper<AsyncHandle<T>> {
+        SendWrapper::new(AsyncHandle {
+            chan: self.tx.clone(),
+        })
+    }
+
+    fn waiting_cb(siv: &Cursive) {
+        siv.cb_sink().send(Box::new(|siv| Self::waiting_cb(siv))).unwrap();
     }
 
     /// Mark the maximum allowed width in characters, the loading animation may consume.
@@ -309,36 +294,41 @@ impl<T: View> AsyncView<T> {
 impl<T: View + Sized> View for AsyncView<T> {
     fn draw(&self, printer: &Printer) {
         match self.view {
-            Some(ref view) => view.draw(printer),
-            None => self.loading.draw(printer),
+            AsyncState::Loaded(ref view) => view.draw(printer),
+            AsyncState::Error(ref msg) => TextView::new(msg).draw(printer),
+            AsyncState::Pending => self.loading.draw(printer),
         }
     }
 
     fn layout(&mut self, vec: Vec2) {
         match self.view {
-            Some(ref mut view) => view.layout(vec),
-            None => self.loading.layout(vec),
+            AsyncState::Loaded(ref mut view) => view.layout(vec),
+            AsyncState::Error(_) => {},
+            AsyncState::Pending => self.loading.layout(vec),
         }
     }
 
     fn needs_relayout(&self) -> bool {
         match self.view {
-            Some(ref view) => view.needs_relayout(),
-            None => true,
+            AsyncState::Loaded(ref view) => view.needs_relayout(),
+            _ => true,
         }
     }
 
     fn required_size(&mut self, constraint: Vec2) -> Vec2 {
-        if self.view.is_none() {
-            match self.rx.try_recv() {
-                Ok(view) => self.view = Some(view),
-                Err(_) => {}
-            }
+        match self.rx.try_recv() {
+            Ok(view) => {
+                self.view = view;
+            },
+            Err(TryRecvError::Empty) => {},
+            Err(TryRecvError::Disconnected) => unreachable!(),
         }
 
+
         match self.view {
-            Some(ref mut view) => view.required_size(constraint),
-            None => {
+            AsyncState::Loaded(ref mut view) => view.required_size(constraint),
+            AsyncState::Error(ref msg) => TextView::new(msg).required_size(constraint),
+            AsyncState::Pending => {
                 let width = self.width.unwrap_or(constraint.x);
                 let height = self.height.unwrap_or(constraint.y);
 
@@ -356,36 +346,37 @@ impl<T: View + Sized> View for AsyncView<T> {
 
     fn on_event(&mut self, ev: Event) -> EventResult {
         match self.view {
-            Some(ref mut view) => view.on_event(ev),
-            None => self.loading.on_event(ev),
+            AsyncState::Loaded(ref mut view) => view.on_event(ev),
+            _ => EventResult::Ignored,
         }
     }
 
     fn call_on_any<'a>(&mut self, sel: &Selector, cb: AnyCb<'a>) {
         match self.view {
-            Some(ref mut view) => view.call_on_any(sel, cb),
-            None => self.loading.call_on_any(sel, cb),
+            AsyncState::Loaded(ref mut view) => view.call_on_any(sel, cb),
+            _ => {},
         }
     }
 
     fn focus_view(&mut self, sel: &Selector) -> Result<(), ()> {
         match self.view {
-            Some(ref mut view) => view.focus_view(sel),
-            None => self.loading.focus_view(sel),
+            AsyncState::Loaded(ref mut view) => view.focus_view(sel),
+            _ => Err(()),
         }
     }
 
     fn take_focus(&mut self, source: Direction) -> bool {
         match self.view {
-            Some(ref mut view) => view.take_focus(source),
-            None => self.loading.take_focus(source),
+            AsyncState::Loaded(ref mut view) => view.take_focus(source),
+            _ => false,
         }
     }
 
     fn important_area(&self, view_size: Vec2) -> Rect {
         match self.view {
-            Some(ref view) => view.important_area(view_size),
-            None => self.loading.important_area(view_size),
+            AsyncState::Loaded(ref view) => view.important_area(view_size),
+            AsyncState::Error(ref msg) => TextView::new(msg).important_area(view_size),
+            AsyncState::Pending => self.loading.important_area(view_size),
         }
     }
 }

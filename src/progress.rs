@@ -1,4 +1,4 @@
-use std::thread;
+/*use std::thread;
 
 use crossbeam::channel::{self, Receiver, Sender};
 use cursive::direction::Direction;
@@ -329,3 +329,4 @@ impl<T: View + Send + Sized> View for AsyncProgressView<T> {
         }
     }
 }
+*/

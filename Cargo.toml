@@ -19,6 +19,7 @@ interpolation = "0.2.0"
 crossbeam = "0.7.2"
 num = "0.2.0"
 failure = "0.1.5"
+send_wrapper = "0.2.0"
 
 [badges]
 travis-ci = { repository = "deinstapel/cursive-async-view" }
