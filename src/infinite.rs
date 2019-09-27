@@ -1,3 +1,6 @@
+use std::time::Duration;
+use std::thread;
+
 use crossbeam::channel::{self, Sender, Receiver, TryRecvError};
 use cursive::direction::Direction;
 use cursive::event::{AnyCb, Event, EventResult};
@@ -8,7 +11,6 @@ use cursive::views::TextView;
 use cursive::{Cursive, Printer, Rect, Vec2};
 use interpolation::Ease;
 use num::clamp;
-use failure::Fail;
 use send_wrapper::SendWrapper;
 
 use crate::utils;
@@ -100,33 +102,10 @@ pub fn default_animation(width: usize, _height: usize, frame_idx: usize) -> Anim
     }
 }
 
-#[derive(Debug, Fail)]
-pub enum HandleError {
-    #[fail(display = "The async view receiving the loaded view is not available (e.g. already dropped)")]
-    ViewNotAvailable,
-}
-
-pub struct AsyncHandle<V: View> {
-    // TODO: use a sender reference here to force the handle user to be on the same thread as the async-view. Also, this would eliminate the ViewNotAvailable error as the compiler could check for the lifetime.
-    chan: Sender<AsyncState<V>>,
-}
-
-enum AsyncState<V: View> {
+pub enum AsyncState<V: View> {
     Loaded(V),
     Error(String),
     Pending,
-}
-
-impl<V: View> AsyncHandle<V> {
-    pub fn loaded(self, view: V) -> Result<(), HandleError> {
-        self.chan.send(AsyncState::Loaded(view))
-            .map_err(|_| HandleError::ViewNotAvailable)
-    }
-
-    pub fn error<S: Into<String>>(self, msg: S) -> Result<(), HandleError> {
-        self.chan.send(AsyncState::Error(msg.into()))
-            .map_err(|_| HandleError::ViewNotAvailable)
-    }
 }
 
 /// An `AsyncView` is a wrapper view that displays a loading screen, until the child
@@ -175,7 +154,6 @@ pub struct AsyncView<T: View> {
     width: Option<usize>,
     height: Option<usize>,
     pos: usize,
-    tx: Sender<AsyncState<T>>,
     rx: Receiver<AsyncState<T>>,
 }
 
@@ -188,12 +166,13 @@ impl<T: View> AsyncView<T> {
     /// The creator function will be executed on a dedicated thread in the
     /// background. Make sure that this function will never block indefinitely.
     /// Otherwise, the creation thread will get stuck.
-    pub fn new(siv: &Cursive) -> Self
+    pub fn new<F>(siv: &mut Cursive, creator: F) -> Self
+        where F: Fn(&mut Cursive) -> AsyncState<T> + 'static
     {
         // trust me, I'm an engineer
         let (tx, rx) = channel::unbounded();
 
-        //Self::waiting_cb(siv);
+        Self::polling_cb(siv, SendWrapper::new(tx), creator);
 
         Self {
             view: AsyncState::Pending,
@@ -203,18 +182,27 @@ impl<T: View> AsyncView<T> {
             height: None,
             pos: 0,
             rx,
-            tx,
         }
     }
 
-    pub fn handle(&self) -> SendWrapper<AsyncHandle<T>> {
-        SendWrapper::new(AsyncHandle {
-            chan: self.tx.clone(),
-        })
-    }
+    fn polling_cb<F>(siv: &mut Cursive, chan: SendWrapper<Sender<AsyncState<T>>>, cb: F)
+        where F: Fn(&mut Cursive) -> AsyncState<T> + 'static
+    {
+        match cb(siv) {
+            AsyncState::Pending => {
+                let sink = siv.cb_sink().clone();
+                let cb = SendWrapper::new(cb);
+                thread::spawn(move || {
+                    thread::sleep(Duration::from_millis(16));
+                    sink.send(Box::new(move |siv| Self::polling_cb(siv, chan, cb.take()))).unwrap();
+                });
+            },
+            state => {
+                chan.send(state).unwrap();
+            }
+        }
 
-    fn waiting_cb(siv: &Cursive) {
-        siv.cb_sink().send(Box::new(|siv| Self::waiting_cb(siv))).unwrap();
+
     }
 
     /// Mark the maximum allowed width in characters, the loading animation may consume.
