@@ -12,6 +12,8 @@ use cursive::{Cursive, Printer, Rect, Vec2};
 use interpolation::Ease;
 use num::clamp;
 use send_wrapper::SendWrapper;
+use log::debug;
+pub use notify_rust::Notification;
 
 use crate::utils;
 
@@ -155,6 +157,7 @@ pub struct AsyncView<T: View> {
     height: Option<usize>,
     pos: usize,
     rx: Receiver<AsyncState<T>>,
+    notification: Option<Notification>,
 }
 
 impl<T: View> AsyncView<T> {
@@ -182,6 +185,7 @@ impl<T: View> AsyncView<T> {
             height: None,
             pos: 0,
             rx,
+            notification: None,
         }
     }
 
@@ -250,6 +254,41 @@ impl<T: View> AsyncView<T> {
         self.height = Some(height);
     }
 
+    /// Set the notification which is send when the loading has been completed.
+    /// Chainable variant of `set_notification`.
+    pub fn with_notification(mut self, not: Notification) -> Self {
+        self.set_notification(not);
+        self
+    }
+
+    /// Set the notification which is send when the loading has been completed.
+    ///
+    /// ```
+    /// use notify_rust::{Notification, Timeout};
+    /// use cursive::Cursive;
+    /// use cursive_async_view::{AsyncView, AsyncState};
+    ///
+    /// let mut siv = Cursive::default();
+    /// let start = std::time::Instant::now();
+    /// let mut async_view = AsyncView::new(&siv, || {
+    ///     if start.elapsed().as_secs() > 5 {
+    ///         AsyncState::Pending
+    ///     } else {
+    ///         AsyncState::Loaded(cursive::views::TextView::new("Content loaded!"))
+    ///     }
+    /// });
+    /// async_view.set_notification(
+    ///     Notification::new()
+    ///         .summary("View ready")
+    ///         .body("The view has been successfully loaded!")
+    ///         .timeout(Timeout::Milliseconds(5000))
+    /// )
+    /// ```
+    /// Note: For notification we use the awesome crate `notify-rust`, all restrictions depending on your OS can be seen there.
+    pub fn set_notification(&mut self, not: Notification) {
+        self.notification = Some(not);
+    }
+
     /// Set a custom animation function for this view, indicating that the wrapped view is
     /// not available yet. See the `default_animation` function reference for an example on
     /// how to create a custom animation function.
@@ -264,6 +303,11 @@ impl<T: View> AsyncView<T> {
     {
         self.pos = 0;
         self.animation_fn = Box::new(animation_fn);
+    }
+
+    /// Make the view do not send a nootification when the loading is completed. This is the default.
+    pub fn remove_notification(&mut self) {
+        self.notification = None;
     }
 
     /// Make the loading animation inherit its width from the parent view. This is the default.
@@ -304,9 +348,16 @@ impl<T: View + Sized> View for AsyncView<T> {
     fn required_size(&mut self, constraint: Vec2) -> Vec2 {
         match self.rx.try_recv() {
             Ok(view) => {
+                if let Some(notification) = &self.notification {
+                    match notification.show() {
+                        Ok(_) => {},
+                        Err(e) => debug!("notification could not be displayed: {}", e),
+                    }
+                }
                 self.view = view;
             },
             Err(TryRecvError::Empty) => {},
+            // TODO: FIX, This panics when the view was loaded, because the corresponding senders get dropped
             Err(TryRecvError::Disconnected) => unreachable!(),
         }
 
