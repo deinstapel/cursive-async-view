@@ -48,14 +48,20 @@ fn main() {
         // Do not run heavy calculations here!
         // Instead look if the calculation is ready.
         match rx.try_recv() {
+            // ooooooh, another radio button for me
             Ok(msg) => {
                 buttons.push(group.button_str(msg));
 
+                // there are more buttons to be excited about!
                 AsyncState::Pending
             },
+
+            // no button today, but maybe next time
             Err(TryRecvError::Empty) => {
                 AsyncState::Pending
             },
+
+            // channel got closed, so looks like these are all my buttons...
             Err(TryRecvError::Disconnected) => {
                 // If the channel has disconnected, we have received all radio
                 // buttons, so lets resolve the async view.
