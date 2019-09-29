@@ -1,27 +1,39 @@
 //! This project provides a wrapper view with a loading screen for
-//! [gyscos/cursive](https://github.com/gyscos/cursive) views. The loading screen will
-//! disappear once the wrapped view is fully loaded. This is useful for displaying views
-//! which may take long to construct or depend on e.g. the network.
+//! [gyscos/cursive](https://github.com/gyscos/cursive) views. The loading screen
+//! will disappear once the wrapped view is fully loaded. This is useful for
+//! displaying views which need data that takes long to construct or depend on
+//! e.g. the network.
 //!
 //! # Asynchronous view loading without progress information
 //!
-//! If you can't tell the progress during a long taking creation of a view, you may
-//! wrap the creation of this view in an `AsyncView`. This will display a loading
-//! animation until the inner view is ready to be drawn.
+//! If you can't tell the progress during a long taking preparation of data for
+//! a view, you may wrap the creation of this view in an `AsyncView`. This will
+//! display a loading animation until the inner view is ready to be drawn.
 //!
 //! ```
+//! use std::time::{Instant, Duration};
 //! use cursive::{views::TextView, Cursive};
-//! use cursive_async_view::AsyncView;
+//! use cursive_async_view::{AsyncView, AsyncState};
 //!
 //! let mut siv = Cursive::default();
-//! let async_view = AsyncView::new(&siv, move || {
-//!     std::thread::sleep(std::time::Duration::from_secs(10));
-//!     TextView::new("Yay!\n\nThe content has loaded!")
+//! let instant = Instant::now();
+//! let async_view = AsyncView::new(&mut siv, move || {
+//!     if instant.elapsed() > Duration::from_secs(10) {
+//!         AsyncState::Available(
+//!             TextView::new("Yay!\n\nThe content has loaded!")
+//!         )
+//!     } else {
+//!         AsyncState::Pending
+//!     }
 //! });
 //!
 //! siv.add_layer(async_view);
 //! // siv.run();
 //! ```
+//!
+//! Refer to the `AsyncView` struct level documentation for a detailed
+//! explanation or to the `simple` example located in the source code
+//! repository.
 //!
 //! # Asynchronous view loading with a progress bar
 //!

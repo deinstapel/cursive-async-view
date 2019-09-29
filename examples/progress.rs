@@ -1,4 +1,4 @@
-extern crate cursive_async_view;
+/*extern crate cursive_async_view;
 
 use crossbeam::channel::Sender;
 use cursive::{self, views::Dialog, views::TextView, Cursive};
@@ -31,4 +31,8 @@ fn main() {
 
     siv.add_layer(dialog);
     siv.run();
+}
+*/
+
+fn main() {
 }

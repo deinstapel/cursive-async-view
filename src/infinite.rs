@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::thread;
 
 use crossbeam::channel::{self, Sender, Receiver, TryRecvError};
@@ -15,9 +15,10 @@ use send_wrapper::SendWrapper;
 
 use crate::utils;
 
-/// This struct represents the content of a single loading animation frame,
+/// This struct represents the content of a single loading or error animation frame,
 /// produced by a animation function of the `AsyncView`. Read the documentation
-/// of the `default_animation` to see how to implement your own animation function.
+/// of the `default_animation` or `default_error` to see how to implement your own
+/// animation functions.
 pub struct AnimationFrame {
     /// A `StyledString` that will be displayed inside a `TextView` for this frame.
     pub content: StyledString,
@@ -34,10 +35,11 @@ pub struct AnimationFrame {
 /// As an example a very basic loading function would look like this:
 ///
 /// ```
+/// use std::time::{Instant, Duration};
 /// use cursive::Cursive;
 /// use cursive::views::TextView;
 /// use cursive::utils::markup::StyledString;
-/// use cursive_async_view::{AsyncView, AnimationFrame};
+/// use cursive_async_view::{AsyncView, AsyncState, AnimationFrame};
 ///
 /// fn my_loading_animation(
 ///     _width: usize,
@@ -57,15 +59,23 @@ pub struct AnimationFrame {
 /// }
 ///
 /// let mut siv = Cursive::default();
-/// let async_view = AsyncView::new(&siv, move || {
-///     std::thread::sleep(std::time::Duration::from_secs(10));
-///     TextView::new("Yay!\n\nThe content has loaded!")
-/// })
-/// .with_animation_fn(my_loading_animation);
+/// let instant = Instant::now();
+/// let async_view = AsyncView::new(&mut siv, move || {
+///     if instant.elapsed() > Duration::from_secs(5) {
+///         AsyncState::Available(
+///             TextView::new("Yay!\n\nThe content has loaded!")
+///         )
+///     } else {
+///         AsyncState::Pending
+///     }
+/// }).with_animation_fn(my_loading_animation);
+///
+/// siv.add_layer(async_view);
+/// // siv.run();
 /// ```
 ///
-/// This animation function will first display `loading` for 1 second and then display
-/// `content` for 1 second.
+/// This animation function will first display `loading` for half a second and then display
+/// `content` for half a second.
 ///
 /// The `width` and `height` parameters contain the maximum size the content may have
 /// (in characters). The initial `frame_idx` is 0.
@@ -74,7 +84,7 @@ pub fn default_animation(width: usize, _height: usize, frame_idx: usize) -> Anim
     let background = PaletteColor::HighlightInactive;
     let symbol = "━";
 
-    let duration = 2 * 1000 / 30;
+    let duration = 60; // one second
     let durationf = duration as f64;
 
     let idx = frame_idx % duration;
@@ -102,27 +112,101 @@ pub fn default_animation(width: usize, _height: usize, frame_idx: usize) -> Anim
     }
 }
 
+/// The default error animation for a `AsyncView`.
+///
+/// # Creating your own error function
+///
+/// As an example a very basic error function would look like this:
+///
+/// ```
+/// use std::time::{Instant, Duration};
+/// use cursive::Cursive;
+/// use cursive::views::TextView;
+/// use cursive::utils::markup::StyledString;
+/// use cursive_async_view::{AsyncView, AsyncState, AnimationFrame};
+///
+/// fn my_error_animation(
+///     msg: &str,
+///     _width: usize,
+///     _height: usize,
+///     _frame_idx: usize,
+/// ) -> AnimationFrame {
+///     AnimationFrame {
+///         content: StyledString::plain(msg),
+///         next_frame_idx: 0,
+///     }
+/// }
+///
+/// let mut siv = Cursive::default();
+/// let instant = Instant::now();
+/// let async_view: AsyncView<TextView> = AsyncView::new(&mut siv, move || {
+///     if instant.elapsed() > Duration::from_secs(5) {
+///         AsyncState::Error("Oh no, an error occured!".to_string())
+///     } else {
+///         AsyncState::Pending
+///     }
+/// }).with_error_fn(my_error_animation);
+///
+/// siv.add_layer(async_view);
+/// // siv.run();
+/// ```
+///
+/// This error function will just display the error message itself.
+///
+/// The `width` and `height` parameters contain the maximum size the content may have
+/// (in characters). The initial `frame_idx` is 0.
+pub fn default_error(msg: &str, _width: usize, _height: usize, _frame_idx: usize) -> AnimationFrame {
+    AnimationFrame {
+        content: StyledString::plain(msg),
+        next_frame_idx: 0,
+    }
+}
+
+/// This enum is used in the ready_poll callback to tell the async view
+/// whether the view is already available, an error occured, or is still pending.
 pub enum AsyncState<V: View> {
-    Loaded(V),
+    /// The view of type `V` is now available and ready to be owned by the async view
+    /// where it will get layouted and drawn instead of the loading animation.
+    Available(V),
+
+    /// Loading of the view failed with the given error.
     Error(String),
+
+    /// The view is not available yet, try again later.
     Pending,
 }
 
-/// An `AsyncView` is a wrapper view that displays a loading screen, until the child
-/// view is successfully created. The creation of the inner view is done on a
-/// dedicated thread. Therefore, it is necessary for the creation function to
-/// always return, otherwise the thread will get stuck.
+/// An `AsyncView` is a wrapper view that displays a loading screen, until the
+/// child view is ready to be created.
+///
+/// The `AsyncView` regularly calls the provided `poll_ready` function which
+/// indicates whether the view is available or not by returning an `AsyncState`
+/// enum. The `poll_ready` callback should only **check** for data to be
+/// available and create the child view when the data got available. It must
+/// **never** block until the data is available or do heavy calculations!
+///
+/// Use a different thread for long taking calculations. Check the `simple`
+/// example for an example on how to use a dedicated calculation thread with
+/// the `AsyncView`.
 ///
 /// # Example usage
 ///
 /// ```
+/// use std::time::{Instant, Duration};
 /// use cursive::{views::TextView, Cursive};
-/// use cursive_async_view::AsyncView;
+/// use cursive_async_view::{AsyncView, AsyncState};
 ///
 /// let mut siv = Cursive::default();
-/// let async_view = AsyncView::new(&siv, move || {
-///     std::thread::sleep(std::time::Duration::from_secs(10));
-///     TextView::new("Yay!\n\nThe content has loaded!")
+/// let instant = Instant::now();
+/// let async_view = AsyncView::new(&mut siv, move || {
+///     // check if the view can be created
+///     if instant.elapsed() > Duration::from_secs(10) {
+///         AsyncState::Available(
+///             TextView::new("Yay!\n\nThe content has loaded!")
+///         )
+///     } else {
+///         AsyncState::Pending
+///     }
 /// });
 ///
 /// siv.add_layer(async_view);
@@ -130,54 +214,46 @@ pub enum AsyncState<V: View> {
 /// ```
 ///
 /// The content will be displayed after 10 seconds.
-///
-/// # Threads
-///
-/// The `new(siv, creator)` method will spawn 2 threads:
-///
-/// 1. `cursive-async-view::creator` The creation thread for the wrapped view.
-///    This thread will stop running as soon as the creation function returned.
-/// 2. `cursive-async-view::updater` The update thread for ensuring 30fps during
-///    the loading animation. This thread will be stopped by `AsyncView` when the
-///    creation function returned and the new view is available for layouting.
-///
-/// The threads are labeled as indicated above.
-///
-/// # TODO
-///
-/// * make creation function return a result to mark an unsuccessful creation
-///
 pub struct AsyncView<T: View> {
     view: AsyncState<T>,
     loading: TextView,
     animation_fn: Box<dyn Fn(usize, usize, usize) -> AnimationFrame + 'static>,
+    error_fn: Box<dyn Fn(&str, usize, usize, usize) -> AnimationFrame + 'static>,
     width: Option<usize>,
     height: Option<usize>,
     pos: usize,
     rx: Receiver<AsyncState<T>>,
 }
 
+lazy_static::lazy_static! {
+    static ref FPS: Duration = Duration::from_secs(1) / 60;
+}
+
 impl<T: View> AsyncView<T> {
-    /// Create a new `AsyncView` instance. The cursive reference is only used
+    /// Create a new `AsyncView` instance. The cursive reference is used
     /// to control the refresh rate of the terminal when the loading animation
     /// is running. In order to show the view, it has to be directly or indirectly
     /// added to a cursive layer like any other view.
     ///
-    /// The creator function will be executed on a dedicated thread in the
-    /// background. Make sure that this function will never block indefinitely.
-    /// Otherwise, the creation thread will get stuck.
-    pub fn new<F>(siv: &mut Cursive, creator: F) -> Self
-        where F: Fn() -> AsyncState<T> + 'static
+    /// The `ready_poll` function will be called regularly until the view has
+    /// either been loaded or errored. Use this function only to check whether
+    /// your data is available. Do not run heavy calculations in this function.
+    /// Instead use a dedicated thread for it as shown in the `simple` example.
+    pub fn new<F>(siv: &mut Cursive, ready_poll: F) -> Self
+        where F: FnMut() -> AsyncState<T> + 'static
     {
-        // trust me, I'm an engineer
+        // create communication channel between cursive event loop and
+        // this views layout code
         let (tx, rx) = channel::unbounded();
 
-        Self::polling_cb(siv, SendWrapper::new(tx), creator);
+        let instant = Instant::now();
+        Self::polling_cb(siv, instant, SendWrapper::new(tx), ready_poll);
 
         Self {
             view: AsyncState::Pending,
             loading: TextView::new(""),
             animation_fn: Box::new(default_animation),
+            error_fn: Box::new(default_error),
             width: None,
             height: None,
             pos: 0,
@@ -185,20 +261,32 @@ impl<T: View> AsyncView<T> {
         }
     }
 
-    fn polling_cb<F>(siv: &mut Cursive, chan: SendWrapper<Sender<AsyncState<T>>>, cb: F)
-        where F: Fn() -> AsyncState<T> + 'static
+    fn polling_cb<F>(
+        siv: &mut Cursive,
+        instant: Instant,
+        chan: SendWrapper<Sender<AsyncState<T>>>,
+        mut cb: F,
+    )
+        where F: FnMut() -> AsyncState<T> + 'static
     {
         match cb() {
             AsyncState::Pending => {
                 let sink = siv.cb_sink().clone();
                 let cb = SendWrapper::new(cb);
                 thread::spawn(move || {
-                    thread::sleep(Duration::from_millis(16));
-                    sink.send(Box::new(move |siv| Self::polling_cb(siv, chan, cb.take()))).unwrap();
+                    // ensure ~60fps
+                    if let Some(duration) = FPS.checked_sub(instant.elapsed()) {
+                        thread::sleep(duration);
+                    }
+
+                    sink.send(Box::new(move |siv| {
+                        Self::polling_cb(siv, Instant::now(), chan, cb.take())
+                    })).unwrap();
                 });
             },
             state => {
                 chan.send(state).unwrap();
+                // chan dropped here, so the rx must handle disconnected
             }
         }
     }
@@ -234,8 +322,26 @@ impl<T: View> AsyncView<T> {
         F: Fn(usize, usize, usize) -> AnimationFrame + 'static,
     {
         Self {
-            pos: 0,
             animation_fn: Box::new(animation_fn),
+            ..self
+        }
+    }
+
+    /// Set a custom error animation function for this view, indicating that the
+    /// wrapped view has failed to load. See the `default_error` function
+    /// reference for an example on how to create a custom error animation
+    /// function.
+    pub fn with_error_fn<F>(self, error_fn: F) -> Self
+    where
+    // We cannot use a lifetime bound to the AsyncView struct because View has a
+    //  'static requirement. Therefore we have to make sure the error_fn is
+    // 'static, meaning it owns all values and does not reference anything
+    // outside of its scope. In practice this means all animation_fn must be
+    // `move |width| {...}` or fn's.
+        F: Fn(&str, usize, usize, usize) -> AnimationFrame + 'static,
+    {
+        Self {
+            error_fn: Box::new(error_fn),
             ..self
         }
     }
@@ -256,14 +362,24 @@ impl<T: View> AsyncView<T> {
     ///
     /// This function may be set at any time. The loading animation can be changed even if
     /// the previous loading animation has already started.
-    ///
-    /// > The `frame_idx` of the loading animation is reset to 0 when setting a new animation function
     pub fn set_animation_fn<F>(&mut self, animation_fn: F)
     where
         F: Fn(usize, usize, usize) -> AnimationFrame + 'static,
     {
-        self.pos = 0;
         self.animation_fn = Box::new(animation_fn);
+    }
+
+    /// Set a custom error animation function for this view, indicating that the wrapped view
+    /// has failed to load. See the `default_error` function reference for an example on
+    /// how to create a custom error animation function.
+    ///
+    /// This function may be set at any time. The error animation can be changed even if
+    /// the previous error animation has already started.
+    pub fn set_error_fn<F>(&mut self, error_fn: F)
+    where
+        F: Fn(&str, usize, usize, usize) -> AnimationFrame + 'static,
+    {
+        self.error_fn = Box::new(error_fn);
     }
 
     /// Make the loading animation inherit its width from the parent view. This is the default.
@@ -280,23 +396,21 @@ impl<T: View> AsyncView<T> {
 impl<T: View + Sized> View for AsyncView<T> {
     fn draw(&self, printer: &Printer) {
         match self.view {
-            AsyncState::Loaded(ref view) => view.draw(printer),
-            AsyncState::Error(ref msg) => TextView::new(msg).draw(printer),
-            AsyncState::Pending => self.loading.draw(printer),
+            AsyncState::Available(ref view) => view.draw(printer),
+            _ => self.loading.draw(printer),
         }
     }
 
     fn layout(&mut self, vec: Vec2) {
         match self.view {
-            AsyncState::Loaded(ref mut view) => view.layout(vec),
-            AsyncState::Error(_) => {},
-            AsyncState::Pending => self.loading.layout(vec),
+            AsyncState::Available(ref mut view) => view.layout(vec),
+            _ => self.loading.layout(vec),
         }
     }
 
     fn needs_relayout(&self) -> bool {
         match self.view {
-            AsyncState::Loaded(ref view) => view.needs_relayout(),
+            AsyncState::Available(ref view) => view.needs_relayout(),
             _ => true,
         }
     }
@@ -306,14 +420,30 @@ impl<T: View + Sized> View for AsyncView<T> {
             Ok(view) => {
                 self.view = view;
             },
-            Err(TryRecvError::Empty) => {},
-            Err(TryRecvError::Disconnected) => unreachable!(),
+            Err(TryRecvError::Empty) => {
+                // if empty, try next tick
+            },
+            Err(TryRecvError::Disconnected) => {
+                // if disconnected, view is loaded or error message is displayed
+            },
         }
 
 
         match self.view {
-            AsyncState::Loaded(ref mut view) => view.required_size(constraint),
-            AsyncState::Error(ref msg) => TextView::new(msg).required_size(constraint),
+            AsyncState::Available(ref mut view) => view.required_size(constraint),
+            AsyncState::Error(ref msg) => {
+                let width = self.width.unwrap_or(constraint.x);
+                let height = self.height.unwrap_or(constraint.y);
+
+                let AnimationFrame {
+                    content,
+                    next_frame_idx,
+                } = (self.error_fn)(msg, width, height, self.pos);
+                self.loading.set_content(content);
+                self.pos = next_frame_idx;
+
+                self.loading.required_size(constraint)
+            },
             AsyncState::Pending => {
                 let width = self.width.unwrap_or(constraint.x);
                 let height = self.height.unwrap_or(constraint.y);
@@ -332,37 +462,36 @@ impl<T: View + Sized> View for AsyncView<T> {
 
     fn on_event(&mut self, ev: Event) -> EventResult {
         match self.view {
-            AsyncState::Loaded(ref mut view) => view.on_event(ev),
+            AsyncState::Available(ref mut view) => view.on_event(ev),
             _ => EventResult::Ignored,
         }
     }
 
     fn call_on_any<'a>(&mut self, sel: &Selector, cb: AnyCb<'a>) {
         match self.view {
-            AsyncState::Loaded(ref mut view) => view.call_on_any(sel, cb),
+            AsyncState::Available(ref mut view) => view.call_on_any(sel, cb),
             _ => {},
         }
     }
 
     fn focus_view(&mut self, sel: &Selector) -> Result<(), ()> {
         match self.view {
-            AsyncState::Loaded(ref mut view) => view.focus_view(sel),
+            AsyncState::Available(ref mut view) => view.focus_view(sel),
             _ => Err(()),
         }
     }
 
     fn take_focus(&mut self, source: Direction) -> bool {
         match self.view {
-            AsyncState::Loaded(ref mut view) => view.take_focus(source),
+            AsyncState::Available(ref mut view) => view.take_focus(source),
             _ => false,
         }
     }
 
     fn important_area(&self, view_size: Vec2) -> Rect {
         match self.view {
-            AsyncState::Loaded(ref view) => view.important_area(view_size),
-            AsyncState::Error(ref msg) => TextView::new(msg).important_area(view_size),
-            AsyncState::Pending => self.loading.important_area(view_size),
+            AsyncState::Available(ref view) => view.important_area(view_size),
+            _ => self.loading.important_area(view_size),
         }
     }
 }
