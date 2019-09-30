@@ -153,12 +153,59 @@ pub fn default_animation(width: usize, _height: usize, frame_idx: usize) -> Anim
 ///
 /// This error function will just display the error message itself.
 ///
-/// The `width` and `height` parameters contain the maximum size the content may have
+/// The `width` and `height` prameters contain the maximum size the content may have
 /// (in characters). The initial `frame_idx` is 0.
-pub fn default_error(msg: &str, _width: usize, _height: usize, _frame_idx: usize) -> AnimationFrame {
+pub fn default_error(msg: &str, width: usize, _height: usize, frame_idx: usize) -> AnimationFrame {
+    let foreground = PaletteColor::Highlight;
+    let background = PaletteColor::HighlightInactive;
+    let symbol = "━";
+
+    let mut msg = msg.to_string();
+
+    let duration = 60; // one second
+    let durationf = duration as f64;
+
+    let idx = frame_idx % duration;
+    let idxf = idx as f64;
+    let factor = idxf / durationf;
+    let begin_factor = clamp(((factor + 0.5) % 1.0).circular_in_out(), 0.0, 1.0);
+    let end_factor = clamp(((factor + 0.75) % 1.0).circular_in_out() * 2.0, 0.0, 1.0);
+    let begin = (begin_factor * width as f64) as usize;
+    let end = (end_factor * width as f64) as usize;
+    let mut result = StyledString::default();
+    if begin >= msg.len() {
+        // Text can be fully shown
+        return AnimationFrame {
+            content: {
+                result.append_plain(msg);
+                result.append_styled(utils::repeat_str(symbol, end.saturating_sub(begin)), foreground);
+                result
+            },
+            next_frame_idx: {
+                if end.saturating_sub(begin) == 0 {
+                    frame_idx
+                } else {
+                    frame_idx + 1
+                }
+            },
+        }
+    }
+
+    if end >= begin {
+        msg.truncate(begin);
+        result.append_plain(msg);
+        result.append_styled(utils::repeat_str(symbol, end - begin), foreground);
+        result.append_styled(utils::repeat_str(symbol, width - end), background);
+    } else {
+        // Complete animation until text can be unveiled
+        result.append_styled(utils::repeat_str(symbol, end), foreground);
+        result.append_styled(utils::repeat_str(symbol, begin - end), background);
+        result.append_styled(utils::repeat_str(symbol, width - begin), foreground);
+    }
+
     AnimationFrame {
-        content: StyledString::plain(msg),
-        next_frame_idx: 0,
+        content: result,
+        next_frame_idx: frame_idx + 1,
     }
 }
 
@@ -285,6 +332,14 @@ impl<T: View> AsyncView<T> {
                 });
             },
             state => {
+                // For now workaround
+                let sink = siv.cb_sink().clone();
+                thread::spawn(move || {
+                    loop {
+                        thread::sleep(Duration::from_millis(16));
+                        sink.send(Box::new(|_| {})).unwrap();
+                    }
+                });
                 chan.send(state).unwrap();
                 // chan dropped here, so the rx must handle disconnected
             }
