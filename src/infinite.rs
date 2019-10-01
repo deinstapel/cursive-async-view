@@ -1,7 +1,7 @@
-use std::time::{Duration, Instant};
 use std::thread;
+use std::time::{Duration, Instant};
 
-use crossbeam::channel::{self, Sender, Receiver, TryRecvError};
+use crossbeam::channel::{self, Receiver, Sender, TryRecvError};
 use cursive::direction::Direction;
 use cursive::event::{AnyCb, Event, EventResult};
 use cursive::theme::PaletteColor;
@@ -281,7 +281,7 @@ pub struct AsyncView<T: View> {
 }
 
 lazy_static::lazy_static! {
-    static ref FPS: Duration = Duration::from_secs(1) / 60;
+    pub(crate) static ref FPS: Duration = Duration::from_secs(1) / 60;
 }
 
 impl<T: View> AsyncView<T> {
@@ -295,7 +295,8 @@ impl<T: View> AsyncView<T> {
     /// your data is available. Do not run heavy calculations in this function.
     /// Instead use a dedicated thread for it as shown in the `simple` example.
     pub fn new<F>(siv: &mut Cursive, ready_poll: F) -> Self
-        where F: FnMut() -> AsyncState<T> + 'static
+    where
+        F: FnMut() -> AsyncState<T> + 'static,
     {
         // create communication channel between cursive event loop and
         // this views layout code
@@ -322,8 +323,8 @@ impl<T: View> AsyncView<T> {
         instant: Instant,
         chan: SendWrapper<Sender<AsyncState<T>>>,
         mut cb: F,
-    )
-        where F: FnMut() -> AsyncState<T> + 'static
+    ) where
+        F: FnMut() -> AsyncState<T> + 'static,
     {
         match cb() {
             AsyncState::Pending => {
@@ -337,17 +338,16 @@ impl<T: View> AsyncView<T> {
 
                     sink.send(Box::new(move |siv| {
                         Self::polling_cb(siv, Instant::now(), chan, cb.take())
-                    })).unwrap();
+                    }))
+                    .unwrap();
                 });
-            },
+            }
             state => {
                 // For now workaround
                 let sink = siv.cb_sink().clone();
-                thread::spawn(move || {
-                    loop {
-                        thread::sleep(Duration::from_millis(16));
-                        sink.send(Box::new(|_| {})).unwrap();
-                    }
+                thread::spawn(move || loop {
+                    thread::sleep(Duration::from_millis(16));
+                    sink.send(Box::new(|_| {})).unwrap();
                 });
                 chan.send(state).unwrap();
                 // chan dropped here, so the rx must handle disconnected
@@ -487,15 +487,14 @@ impl<T: View + Sized> View for AsyncView<T> {
                 }
 
                 self.view = view;
-            },
+            }
             Err(TryRecvError::Empty) => {
                 // if empty, try next tick
-            },
+            }
             Err(TryRecvError::Disconnected) => {
                 // if disconnected, view is loaded or error message is displayed
-            },
+            }
         }
-
 
         match self.view {
             AsyncState::Available(ref mut view) => view.required_size(constraint),
@@ -511,7 +510,7 @@ impl<T: View + Sized> View for AsyncView<T> {
                 self.pos = next_frame_idx;
 
                 self.loading.required_size(constraint)
-            },
+            }
             AsyncState::Pending => {
                 let width = self.width.unwrap_or(constraint.x);
                 let height = self.height.unwrap_or(constraint.y);
@@ -538,7 +537,7 @@ impl<T: View + Sized> View for AsyncView<T> {
     fn call_on_any<'a>(&mut self, sel: &Selector, cb: AnyCb<'a>) {
         match self.view {
             AsyncState::Available(ref mut view) => view.call_on_any(sel, cb),
-            _ => {},
+            _ => {}
         }
     }
 

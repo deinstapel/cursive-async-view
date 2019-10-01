@@ -1,7 +1,10 @@
-use cursive::{Cursive, views::{Dialog, TextView}};
-use cursive_async_view::{AsyncView, AsyncState};
-use std::time::{Duration, Instant};
+use cursive::{
+    views::{Dialog, TextView},
+    Cursive,
+};
+use cursive_async_view::{AsyncState, AsyncView};
 use std::sync::mpsc::{channel, TryRecvError};
+use std::time::{Duration, Instant};
 
 fn main() {
     let mut siv = Cursive::default();
@@ -41,13 +44,14 @@ fn main() {
                 // noooooo, my mighty channel
                 Err(TryRecvError::Disconnected) => {
                     AsyncState::Error("Shoot, view creation thread exited...".to_string())
-                },
+                }
             }
         }
-    }).with_width(40);
+    })
+    .with_width(40);
 
     // be fancy, add a dialog!
-    siv.add_layer(Dialog::around(loading_view).button("Ok", |s| {s.quit()}));
+    siv.add_layer(Dialog::around(loading_view).button("Ok", |s| s.quit()));
 
     // run Forest, run!!
     siv.run();

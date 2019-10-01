@@ -69,5 +69,7 @@ mod infinite;
 mod progress;
 mod utils;
 
-pub use infinite::{default_animation, AsyncView, AsyncState, AnimationFrame};
-//pub use progress::{default_progress, AsyncProgressView};
+pub use infinite::{default_animation, default_error, AnimationFrame, AsyncState, AsyncView};
+pub use progress::{
+    default_progress, default_progress_error, AsyncProgressState, AsyncProgressView,
+};

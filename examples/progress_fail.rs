@@ -15,8 +15,10 @@ fn main() {
     let start = std::time::Instant::now();
 
     let async_view = AsyncProgressView::new(&mut siv, move || {
-        if start.elapsed().as_secs() < 5 {
-            AsyncProgressState::Pending(1f32 / 5f32 * start.elapsed().as_secs() as f32)
+        if start.elapsed().as_secs() > 2 {
+            AsyncProgressState::Error("Oh no, the view could not be loaded!".to_string())
+        } else if start.elapsed().as_secs() < 7 {
+            AsyncProgressState::Pending(1f32 / 7f32 * start.elapsed().as_secs() as f32)
         } else {
             AsyncProgressState::Available(TextView::new("Yay, the content has loaded!"))
         }

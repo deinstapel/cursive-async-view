@@ -5,9 +5,9 @@ use std::sync::mpsc::TryRecvError;
 use std::thread;
 use std::time::Duration;
 
+use cursive::views::{Dialog, LinearLayout, RadioGroup};
 use cursive::Cursive;
-use cursive::views::{Dialog, RadioGroup, LinearLayout};
-use cursive_async_view::{AsyncView, AsyncState};
+use cursive_async_view::{AsyncState, AsyncView};
 
 fn main() {
     let mut siv = Cursive::default();
@@ -26,11 +26,13 @@ fn main() {
 
         tx.send("🐶🔔 Ding dong, you are wrong...").unwrap();
         thread::sleep(Duration::from_secs(1));
-        tx.send("🦆💦 Splish splash, your opinion is trash!").unwrap();
+        tx.send("🦆💦 Splish splash, your opinion is trash!")
+            .unwrap();
         thread::sleep(Duration::from_secs(1));
         tx.send("🦀🛑 Flippity flop, you need to stop").unwrap();
         thread::sleep(Duration::from_secs(1));
-        tx.send("🔫🐸 Hippity hoppity, this view is now my property").unwrap();
+        tx.send("🔫🐸 Hippity hoppity, this view is now my property")
+            .unwrap();
         thread::sleep(Duration::from_secs(1));
         tx.send("🦄🚬 Miss me").unwrap();
         thread::sleep(Duration::from_secs(1));
@@ -54,12 +56,10 @@ fn main() {
 
                 // there are more buttons to be excited about!
                 AsyncState::Pending
-            },
+            }
 
             // no button today, but maybe next time
-            Err(TryRecvError::Empty) => {
-                AsyncState::Pending
-            },
+            Err(TryRecvError::Empty) => AsyncState::Pending,
 
             // channel got closed, so looks like these are all my buttons...
             Err(TryRecvError::Disconnected) => {
@@ -84,13 +84,12 @@ fn main() {
                         AsyncState::Available(layout)
                     }
                 }
-            },
+            }
         }
     });
 
     // dialogs are cool, so let's use one!
-    let dialog = Dialog::around(async_view.with_width(40))
-        .button("Ok", |s| s.quit());
+    let dialog = Dialog::around(async_view.with_width(40)).button("Ok", |s| s.quit());
     siv.add_layer(dialog);
 
     // fox on the run!
