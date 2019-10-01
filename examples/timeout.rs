@@ -6,6 +6,9 @@ use std::sync::mpsc::{channel, TryRecvError};
 fn main() {
     let mut siv = Cursive::default();
 
+    // We can quit by pressing `q`
+    siv.add_global_callback('q', Cursive::quit);
+
     // remember when we started calculation, to check for the timeout
     let start_time = Instant::now();
 
@@ -18,7 +21,7 @@ fn main() {
         std::thread::sleep(Duration::from_secs(20));
 
         // as TextView implements `Send` we can send it between threads :)
-        tx.send(TextView::new("Content has loaded!")).unwrap();
+        tx.send(TextView::new("Content has loaded!")).ok();
     });
 
     let loading_view = AsyncView::new(&mut siv, move || {

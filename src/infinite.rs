@@ -8,6 +8,7 @@ use cursive::theme::PaletteColor;
 use cursive::utils::markup::StyledString;
 use cursive::view::{Selector, View};
 use cursive::views::TextView;
+use cursive::align::HAlign;
 use cursive::{Cursive, Printer, Rect, Vec2};
 use interpolation::Ease;
 use num::clamp;
@@ -90,8 +91,8 @@ pub fn default_animation(width: usize, _height: usize, frame_idx: usize) -> Anim
     let idx = frame_idx % duration;
     let idxf = idx as f64;
     let factor = idxf / durationf;
-    let begin_factor = clamp(((factor + 0.5) % 1.0).circular_in_out(), 0.0, 1.0);
-    let end_factor = clamp(((factor + 0.75) % 1.0).circular_in_out() * 2.0, 0.0, 1.0);
+    let begin_factor = clamp((factor % 1.0).circular_in_out(), 0.0, 1.0);
+    let end_factor = clamp(((factor + 0.25) % 1.0).circular_in_out() * 2.0, 0.0, 1.0);
     let begin = (begin_factor * width as f64) as usize;
     let end = (end_factor * width as f64) as usize;
 
@@ -155,47 +156,53 @@ pub fn default_animation(width: usize, _height: usize, frame_idx: usize) -> Anim
 ///
 /// The `width` and `height` prameters contain the maximum size the content may have
 /// (in characters). The initial `frame_idx` is 0.
-pub fn default_error(msg: &str, width: usize, _height: usize, frame_idx: usize) -> AnimationFrame {
+pub fn default_error(
+    msg: &str,
+    width: usize,
+    _height: usize,
+    error_idx: usize,
+    frame_idx: usize,
+) -> AnimationFrame {
     let foreground = PaletteColor::Highlight;
     let background = PaletteColor::HighlightInactive;
     let symbol = "━";
 
-    let mut msg = msg.to_string();
+    let offset = utils::repeat_str(" ", HAlign::Center.get_offset(msg.len(), width));
+    let mut msg = format!("{}{}{}", offset, msg, offset);
 
     let duration = 60; // one second
     let durationf = duration as f64;
+    let cycle = if error_idx % duration > duration / 2 { duration } else { 0 };
 
-    let idx = frame_idx % duration;
+    let idx = frame_idx - (error_idx / duration) * duration;
     let idxf = idx as f64;
     let factor = idxf / durationf;
-    let begin_factor = clamp(((factor + 0.5) % 1.0).circular_in_out(), 0.0, 1.0);
-    let end_factor = clamp(((factor + 0.75) % 1.0).circular_in_out() * 2.0, 0.0, 1.0);
+    let begin_factor = clamp((factor % 1.0).circular_in_out(), 0.0, 1.0);
+    let end_factor = clamp(((factor + 0.25) % 1.0).circular_in_out() * 2.0, 0.0, 1.0);
     let begin = (begin_factor * width as f64) as usize;
     let end = (end_factor * width as f64) as usize;
-    let mut result = StyledString::default();
-    if begin >= msg.len() {
+    if frame_idx == cycle + duration {
         // Text can be fully shown
         return AnimationFrame {
-            content: {
-                result.append_plain(msg);
-                result.append_styled(utils::repeat_str(symbol, end.saturating_sub(begin)), foreground);
-                result
-            },
-            next_frame_idx: {
-                if end.saturating_sub(begin) == 0 {
-                    frame_idx
-                } else {
-                    frame_idx + 1
-                }
-            },
+            content: StyledString::plain(msg),
+            next_frame_idx: frame_idx,
         }
     }
 
-    if end >= begin {
+    let mut result = StyledString::default();
+    if end >= begin && idx > cycle {
         msg.truncate(begin);
         result.append_plain(msg);
         result.append_styled(utils::repeat_str(symbol, end - begin), foreground);
         result.append_styled(utils::repeat_str(symbol, width - end), background);
+    } else if end >= begin && idx <= cycle {
+        result.append_styled(utils::repeat_str(symbol, begin), background);
+        result.append_styled(utils::repeat_str(symbol, end - begin), foreground);
+        result.append_styled(utils::repeat_str(symbol, width - end), background);
+    } else if idx > cycle + duration / 2 {
+        msg.truncate(begin);
+        result.append_plain(msg);
+        result.append_styled(utils::repeat_str(symbol, width - begin), foreground);
     } else {
         // Complete animation until text can be unveiled
         result.append_styled(utils::repeat_str(symbol, end), foreground);
@@ -265,10 +272,11 @@ pub struct AsyncView<T: View> {
     view: AsyncState<T>,
     loading: TextView,
     animation_fn: Box<dyn Fn(usize, usize, usize) -> AnimationFrame + 'static>,
-    error_fn: Box<dyn Fn(&str, usize, usize, usize) -> AnimationFrame + 'static>,
+    error_fn: Box<dyn Fn(&str, usize, usize, usize, usize) -> AnimationFrame + 'static>,
     width: Option<usize>,
     height: Option<usize>,
     pos: usize,
+    error_idx: usize,
     rx: Receiver<AsyncState<T>>,
 }
 
@@ -304,6 +312,7 @@ impl<T: View> AsyncView<T> {
             width: None,
             height: None,
             pos: 0,
+            error_idx: 0,
             rx,
         }
     }
@@ -393,7 +402,7 @@ impl<T: View> AsyncView<T> {
     // 'static, meaning it owns all values and does not reference anything
     // outside of its scope. In practice this means all animation_fn must be
     // `move |width| {...}` or fn's.
-        F: Fn(&str, usize, usize, usize) -> AnimationFrame + 'static,
+        F: Fn(&str, usize, usize, usize, usize) -> AnimationFrame + 'static,
     {
         Self {
             error_fn: Box::new(error_fn),
@@ -432,7 +441,7 @@ impl<T: View> AsyncView<T> {
     /// the previous error animation has already started.
     pub fn set_error_fn<F>(&mut self, error_fn: F)
     where
-        F: Fn(&str, usize, usize, usize) -> AnimationFrame + 'static,
+        F: Fn(&str, usize, usize, usize, usize) -> AnimationFrame + 'static,
     {
         self.error_fn = Box::new(error_fn);
     }
@@ -473,6 +482,10 @@ impl<T: View + Sized> View for AsyncView<T> {
     fn required_size(&mut self, constraint: Vec2) -> Vec2 {
         match self.rx.try_recv() {
             Ok(view) => {
+                if let AsyncState::Error(_) = view {
+                    self.error_idx = self.pos;
+                }
+
                 self.view = view;
             },
             Err(TryRecvError::Empty) => {
@@ -493,7 +506,7 @@ impl<T: View + Sized> View for AsyncView<T> {
                 let AnimationFrame {
                     content,
                     next_frame_idx,
-                } = (self.error_fn)(msg, width, height, self.pos);
+                } = (self.error_fn)(msg, width, height, self.error_idx, self.pos);
                 self.loading.set_content(content);
                 self.pos = next_frame_idx;
 
