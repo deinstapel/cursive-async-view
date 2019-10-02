@@ -319,6 +319,45 @@ impl<T: View> AsyncView<T> {
         }
     }
 
+    /// Create a new `AsyncView` instance. The cursive reference is used
+    /// to control the refresh rate of the terminal when the loading animation
+    /// is running. In order to show the view, it has to be directly or indirectly
+    /// added to a cursive layer like any other view.
+    ///
+    /// The `bg_task` function is executed on a background thread called
+    /// `cursive-async-view::bg_task`. It should be used to produce data of
+    /// type `D` which is converted to a view by the `view_creator` function.
+    pub fn new_with_bg_creator<F, C, D>(
+        siv: &mut Cursive,
+        bg_task: F,
+        mut view_creator: C,
+    ) -> Self
+    where
+        D: Send + 'static,
+        F: FnOnce() -> Result<D, String> + Send + 'static,
+        C: FnMut(D) -> T + 'static,
+    {
+        let (tx, rx) = channel::unbounded();
+
+        thread::Builder::new()
+            .name("cursive-async-view::bg_task".into())
+            .spawn(move || {
+                tx.send(bg_task()).unwrap();
+            })
+            .unwrap();
+
+        Self::new(siv, move || {
+            match rx.try_recv() {
+                Ok(Ok(data)) => AsyncState::Available(view_creator(data)),
+                Ok(Err(err)) => AsyncState::Error(err),
+                Err(TryRecvError::Empty) => AsyncState::Pending,
+                Err(TryRecvError::Disconnected) => AsyncState::Error(
+                    "Internal error: bg_task disconnected unexpectedly!".to_string()
+                ),
+            }
+        })
+    }
+
     fn polling_cb<F>(
         siv: &mut Cursive,
         instant: Instant,
