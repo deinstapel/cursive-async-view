@@ -130,6 +130,7 @@ pub fn default_animation(width: usize, _height: usize, frame_idx: usize) -> Anim
 ///     msg: &str,
 ///     _width: usize,
 ///     _height: usize,
+///     _error_idx: usize,
 ///     _frame_idx: usize,
 /// ) -> AnimationFrame {
 ///     AnimationFrame {

@@ -1,6 +1,5 @@
 extern crate cursive_async_view;
 
-use crossbeam::channel::Sender;
 use cursive::{self, views::Dialog, views::TextView, Cursive};
 use cursive_async_view::{AsyncProgressState, AsyncProgressView};
 

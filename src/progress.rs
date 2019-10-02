@@ -1,4 +1,4 @@
-use crossbeam::channel::{bounded, unbounded, Receiver, Sender};
+use crossbeam::channel::{unbounded, Receiver, Sender};
 use cursive::direction::Direction;
 use cursive::event::{AnyCb, Event, EventResult};
 use cursive::theme::PaletteColor;
@@ -13,7 +13,7 @@ use send_wrapper::SendWrapper;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::{infinite::AnimationFrame, infinite::FPS, utils};
+use crate::{infinite::FPS, utils};
 
 pub enum AsyncProgressState<V: View> {
     Pending(f32),
@@ -120,7 +120,7 @@ pub fn default_progress_error(
     let background = PaletteColor::HighlightInactive;
     let symbol = "━";
 
-    let duration = 60; // one second
+    let duration = 30; // half a second
     let durationf = duration as f64;
     let idx = frame_idx;
     let idxf = idx as f64;
