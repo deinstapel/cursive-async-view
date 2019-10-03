@@ -242,19 +242,23 @@ pub enum AsyncState<V: View> {
 }
 
 /// An `AsyncView` is a wrapper view that displays a loading screen, until the
-/// child view is ready to be created.
+/// child view is ready to be created. The view can be used in two different
+/// ways.
 ///
-/// The `AsyncView` regularly calls the provided `poll_ready` function which
-/// indicates whether the view is available or not by returning an `AsyncState`
+/// # Poll-based AsyncView
+///
+/// The poll-based `AsyncView` is constructed via the `AsyncView::new` function
+/// and regularly calls the provided `poll_ready` function. It indicates
+/// whether the child view is available or not by returning an `AsyncState`
 /// enum. The `poll_ready` callback should only **check** for data to be
 /// available and create the child view when the data got available. It must
 /// **never** block until the data is available or do heavy calculations!
 ///
-/// Use a different thread for long taking calculations. Check the `simple`
+/// Use a different thread for long taking calculations. Check the `bg_task`
 /// example for an example on how to use a dedicated calculation thread with
 /// the `AsyncView`.
 ///
-/// # Example usage
+/// ## Example usage of the poll-based variant
 ///
 /// ```
 /// use std::time::{Instant, Duration};
@@ -273,6 +277,43 @@ pub enum AsyncState<V: View> {
 ///         AsyncState::Pending
 ///     }
 /// });
+///
+/// siv.add_layer(async_view);
+/// // siv.run();
+/// ```
+///
+/// The content will be displayed after 10 seconds.
+///
+/// # Producing view data in a background thread
+///
+/// The second variant produces custom data in a background thread via the
+/// provided `bg_task` function. The produced data is then sent to the cursive
+/// thread and given to the provided `view_creator` function. This function
+/// should construct the child view and return it to the async view.
+///
+/// All heavy work **must** be done in the `bg_task` function. Otherwise,
+/// the cursive event loop will be blocked, preventing any rendering or event
+/// handling taking place.
+///
+/// ## Example usage for the background thread variant
+///
+/// ```
+/// use std::thread;
+/// use std::time::Duration;
+///
+/// use cursive::views::TextView;
+/// use cursive::Cursive;
+/// use cursive_async_view::AsyncView;
+///
+/// let mut siv = Cursive::default();
+/// let async_view = AsyncView::new_with_bg_creator(&mut siv, move || {
+///     // this function is executed in a background thread, so we can block
+///     // here as long as we like
+///     thread::sleep(Duration::from_secs(10));
+///
+///     // enough blocking, let's show the content
+///     Ok("Yeet! It worked 🖖")
+/// }, TextView::new); // create a text view from the string
 ///
 /// siv.add_layer(async_view);
 /// // siv.run();
@@ -304,7 +345,7 @@ impl<T: View> AsyncView<T> {
     /// The `ready_poll` function will be called regularly until the view has
     /// either been loaded or errored. Use this function only to check whether
     /// your data is available. Do not run heavy calculations in this function.
-    /// Instead use a dedicated thread for it as shown in the `simple` example.
+    /// Instead use a dedicated thread for it as shown in the `bg_task` example.
     pub fn new<F>(siv: &mut Cursive, ready_poll: F) -> Self
     where
         F: FnMut() -> AsyncState<T> + 'static,

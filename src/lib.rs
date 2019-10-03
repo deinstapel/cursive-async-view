@@ -35,6 +35,35 @@
 //! explanation or to the `simple` example located in the source code
 //! repository.
 //!
+//! If you need to do a blocking operation during the construction of the child
+//! view, you may have a look at the alternate `new_with_bg_task` constructor.
+//!
+//! ```
+//! use std::thread;
+//! use std::time::Duration;
+//!
+//! use cursive::views::TextView;
+//! use cursive::Cursive;
+//! use cursive_async_view::AsyncView;
+//!
+//! let mut siv = Cursive::default();
+//! let async_view = AsyncView::new_with_bg_creator(&mut siv, move || {
+//!     // this function is executed in a background thread, so we can block
+//!     // here as long as we like
+//!     thread::sleep(Duration::from_secs(10));
+//!
+//!     // enough blocking, let's show the content
+//!     Ok("Yeet! It worked 🖖")
+//! }, TextView::new); // create a text view from the string
+//!
+//! siv.add_layer(async_view);
+//! // siv.run();
+//! ```
+//!
+//! Refer to the `AsyncView` struct level documentation for a detailed
+//! explanation or to the `bg_task` example located in the source code
+//! repository.
+//!
 //! # Asynchronous view loading with a progress bar
 //!
 //! If you have information about the progress a long taking view creation has made,
@@ -67,3 +96,5 @@ pub use infinite::{default_animation, default_error, AnimationFrame, AsyncState,
 pub use progress::{
     default_progress, default_progress_error, AsyncProgressState, AsyncProgressView, AnimationProgressFrame
 };
+
+doc_comment::doctest!("../README.md");
