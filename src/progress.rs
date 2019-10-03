@@ -15,16 +15,25 @@ use std::time::{Duration, Instant};
 
 use crate::{infinite::FPS, utils};
 
+/// An enum to be returned by the `poll_ready` callback, with additional information about the creation progress.
 pub enum AsyncProgressState<V: View> {
+    /// Indicates a not completed creation, which is still ongoing. Also reports the progress made as float value between 0 and 1.
     Pending(f32),
+    /// Indicates a not completed creation, which cannot proceed further. Contains an error message to be displayed for the user.
     Error(String),
+    /// Indicates a completed creation. Contains the new child view.
     Available(V),
 }
 
+
+/// This struct contains the content of a single frame for `AsyncProgressView` with some metadata about the current frame.
 pub struct AnimationProgressFrame {
-    content: StyledString,
-    pos: usize,
-    next_frame_idx: usize,
+    /// Stylized String which gets printed until the view is ready, or if the creation has failed.
+    pub content: StyledString,
+    /// Current position of the loading bar.
+    pub pos: usize,
+    /// Index of the next frame to be drawn, useful if you want to interpolate between two states of progress.
+    pub next_frame_idx: usize,
 }
 
 /// The default progress animation for a `AsyncProgressView`.
@@ -38,29 +47,30 @@ pub struct AnimationProgressFrame {
 /// use cursive::Cursive;
 /// use cursive::views::TextView;
 /// use cursive::utils::markup::StyledString;
-/// use cursive_async_view::AsyncProgressView;
+/// use cursive_async_view::{AnimationProgressFrame, AsyncProgressView, AsyncProgressState};
 ///
 /// fn my_progress_function(
 ///     _width: usize,
 ///     _height: usize,
 ///     progress: f32,
-/// ) -> StyledString {
-///     StyledString::plain(format!("{:.0}%", progress * 100.0))
+///     _pos: usize,
+///     frame_idx: usize,
+/// ) -> AnimationProgressFrame {
+///     AnimationProgressFrame {
+///         content: StyledString::plain(format!("{:.0}%", progress * 100.0)),
+///         pos: 0,
+///         next_frame_idx: frame_idx,
+///     }
 /// }
 ///
 /// let mut siv = Cursive::default();
-/// let async_view = AsyncProgressView::new(&siv, |s: Sender<f32>| {
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.2).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.4).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.6).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.8).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(1.0).unwrap();
-///     TextView::new("Yay, the content has loaded!")
+/// let start = std::time::Instant::now();
+/// let async_view = AsyncProgressView::new(&mut siv, move || {
+///     if start.elapsed().as_secs() > 5 {
+///         AsyncProgressState::Pending(start.elapsed().as_secs() as f32 /5f32)
+///     } else {
+///         AsyncProgressState::Available(TextView::new("Loaded!"))
+///     }
 /// })
 /// .with_progress_fn(my_progress_function);
 /// ```
@@ -69,6 +79,7 @@ pub struct AnimationProgressFrame {
 ///
 /// The `width` and `height` parameters contain the maximum size the content may have
 /// (in characters). The `progress` parameter is guaranteed to be a `f32` between 0 and 1.
+/// The `pos` and `frame_idx` parameter are always from the animation frame of the previous iteration.
 pub fn default_progress(
     width: usize,
     _height: usize,
@@ -83,7 +94,7 @@ pub fn default_progress(
     let background = PaletteColor::HighlightInactive;
     let symbol = "━";
 
-    let duration = 30; //half a second
+    let duration = 30; //one second
     let durationf = duration as f64;
 
     let next_pos = width as f32 * progress;
@@ -105,6 +116,47 @@ pub fn default_progress(
     }
 }
 
+/// The default error animation for a `AsyncProgressView`.
+///
+/// # Creating your own error animation
+///
+/// The creation is very similar to the progress animation, but the error message is given now as the first parameter.
+///
+/// ```
+/// use crossbeam::Sender;
+/// use cursive::Cursive;
+/// use cursive::views::TextView;
+/// use cursive::utils::markup::StyledString;
+/// use cursive_async_view::{AnimationProgressFrame, AsyncProgressView, AsyncProgressState};
+///
+/// fn my_error_function(
+///     msg: String,
+///     _width: usize,
+///     _height: usize,
+///     progress: f32,
+///     _pos: usize,
+///     frame_idx: usize,
+/// ) -> AnimationProgressFrame {
+///     AnimationProgressFrame {
+///         content: StyledString::plain(format!("Error: {}", msg)),
+///         pos: 0,
+///         next_frame_idx: frame_idx,
+///     }
+/// }
+///
+/// let mut siv = Cursive::default();
+/// let start = std::time::Instant::now();
+/// let async_view = AsyncProgressView::new(&mut siv, move || {
+///     if start.elapsed().as_secs() > 5 {
+///         AsyncProgressState::Pending(start.elapsed().as_secs() as f32 /5f32)
+///     } else if true {
+///         AsyncProgressState::Error("Oh no, the view could not be loaded!".to_string())
+///     } else {
+///         AsyncProgressState::Available(TextView::new("I thought we never would get here!"))
+///     }
+/// })
+/// .with_error_fn(my_error_function);
+/// ```
 pub fn default_progress_error(
     msg: String,
     width: usize,
@@ -169,52 +221,41 @@ pub fn default_progress_error(
 }
 
 /// An `AsyncProgressView` is a wrapper view that displays a progress bar, until the
-/// child view is successfully created. The creation of the inner view is done on a
-/// dedicated thread. Therefore, it is necessary for the creation function to always
-/// return, otherwise the thread will get stuck.
+/// child view is successfully created or an error in the creation progress occured.
+///
+/// To achieve this a `poll_ready` callback is passed in the creation of `AsyncProgressView` which
+/// returns an `AsyncProgressState` that can indicate that the process is still `Pending` (this contains a float
+/// between 0 and 1, communicating the progress, this information is displayed in the bar), has been successfully
+/// completed `Available` containing the view to be displayed, or if the creation has thrown an `Error`
+/// containing a message to be shown to the user.
+///
+/// The `poll_ready` callback should only **check** for data to be
+/// available and create the child view when the data got available. It must
+/// **never** block until the data is available or do heavy calculations!
+/// Otherwise cursive cannot proceed displaying and your
+/// application will have a blocking loading process!
+///
+/// If you have troubles and need some more in-depth examples have a look at the provided `examples` in the project.
 ///
 /// # Example usage
 ///
 /// ```
-/// use crossbeam::Sender;
 /// use cursive::{views::TextView, Cursive};
-/// use cursive_async_view::AsyncProgressView;
+/// use cursive_async_view::{AsyncProgressView, AsyncProgressState};
 ///
 /// let mut siv = Cursive::default();
-/// let async_view = AsyncProgressView::new(&siv, |s: Sender<f32>| {
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.2).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.4).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.6).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.8).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(1.0).unwrap();
-///     TextView::new("Yay, the content has loaded!")
+/// let start = std::time::Instant::now();
+/// let async_view = AsyncProgressView::new(&mut siv, move || {
+///     if start.elapsed().as_secs() < 3 {
+///         AsyncProgressState::Pending(start.elapsed().as_secs() as f32 / 3f32)
+///     } else {
+///         AsyncProgressState::Available(TextView::new("Finally it loaded!"))
+///     }
 /// });
 ///
 /// siv.add_layer(async_view);
 /// // siv.run();
 /// ```
-///r
-/// # Threads
-///
-/// The `new(siv, creator)` method will spawn 2 threads:
-///
-/// 1. `cursive-async-view::creator` The creation thread for the wrapped view.
-///    This thread will stop running as soon as the creation function returned.
-/// 2. `cursive-async-view::updater` The update thread waits for the creation
-///    function to signal progress and will be stopped by `AsyncProgressView`
-///    when the creation function returned and the new view is available for
-///    layouting.
-///
-/// The threads are labeled as indicated above.
-///
-/// # TODO
-///
-/// * make creation function return a result to mark an unsuccessful creation
 ///
 pub struct AsyncProgressView<T: View> {
     view: AsyncProgressState<T>,
@@ -329,6 +370,16 @@ impl<T: View> AsyncProgressView<T> {
         }
     }
 
+    pub fn with_error_fn<F>(self, error_fn: F) -> Self
+    where
+        F: Fn(String, usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static,
+    {
+        Self {
+            error_fn: Box::new(error_fn),
+            ..self
+        }
+    }
+
     /// Set the maximum allowed width in characters, the progress bar may consume.
     pub fn set_width(&mut self, width: usize) {
         self.width = Some(width);
@@ -350,6 +401,19 @@ impl<T: View> AsyncProgressView<T> {
         F: Fn(usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static,
     {
         self.progress_fn = Box::new(progress_fn);
+    }
+
+    /// Set a custom error function for this view, indicating that an error occured during the
+    /// wrapped view creation. See the `default_progress_error` function reference for an
+    /// example on how to create a custom error function.
+    ///
+    /// The function may be set at any time. The progress bar can be changed even if
+    /// the previous progress bar has already be drawn.
+    pub fn set_error_fn<F>(&mut self, error_fn: F)
+    where
+        F: Fn(String, usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static,
+    {
+        self.error_fn = Box::new(error_fn);
     }
 
     /// Make the progress bar inherit its width from the parent view. This is the default.

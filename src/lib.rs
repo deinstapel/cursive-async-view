@@ -42,23 +42,17 @@
 //! bar until the inner view is ready to be drawn.
 //!
 //! ```
-//! use crossbeam::Sender;
 //! use cursive::{views::TextView, Cursive};
-//! use cursive_async_view::AsyncProgressView;
+//! use cursive_async_view::{AsyncProgressView, AsyncProgressState};
 //!
 //! let mut siv = Cursive::default();
-//! let async_view = AsyncProgressView::new(&siv, |s: Sender<f32>| {
-//!     std::thread::sleep(std::time::Duration::from_secs(1));
-//!     s.send(0.2).unwrap();
-//!     std::thread::sleep(std::time::Duration::from_secs(1));
-//!     s.send(0.4).unwrap();
-//!     std::thread::sleep(std::time::Duration::from_secs(1));
-//!     s.send(0.6).unwrap();
-//!     std::thread::sleep(std::time::Duration::from_secs(1));
-//!     s.send(0.8).unwrap();
-//!     std::thread::sleep(std::time::Duration::from_secs(1));
-//!     s.send(1.0).unwrap();
-//!     TextView::new("Yay, the content has loaded!")
+//! let start = std::time::Instant::now();
+//! let async_view = AsyncProgressView::new(&mut siv, move || {
+//!     if start.elapsed().as_secs() < 3 {
+//!         AsyncProgressState::Pending(start.elapsed().as_secs() as f32 / 3f32)
+//!     } else {
+//!         AsyncProgressState::Available(TextView::new("Finally it loaded!"))
+//!     }
 //! });
 //!
 //! siv.add_layer(async_view);
@@ -71,5 +65,5 @@ mod utils;
 
 pub use infinite::{default_animation, default_error, AnimationFrame, AsyncState, AsyncView};
 pub use progress::{
-    default_progress, default_progress_error, AsyncProgressState, AsyncProgressView,
+    default_progress, default_progress_error, AsyncProgressState, AsyncProgressView, AnimationProgressFrame
 };
