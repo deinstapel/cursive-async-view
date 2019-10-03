@@ -125,15 +125,24 @@ pub fn default_progress_error(
     let idx = frame_idx;
     let idxf = idx as f64;
     let factor = (idxf / durationf).circular_in_out();
-    let offset = width as f64 * factor;
-    let end = pos + offset as usize;
+    let mut offset = width as f64 * factor;
 
+    let padding = width.saturating_sub(msg.len()) / 2;
     let mut background_content = format!(
         "{}{}{}",
-        utils::repeat_str(" ", (width - msg.len()) / 2),
+        utils::repeat_str(" ", padding),
         msg,
-        utils::repeat_str(" ", (width - msg.len()) / 2)
+        utils::repeat_str(" ", padding),
     );
+    // Check for non-char symbols
+    if background_content
+        .as_str()
+        .get(0..offset as usize)
+        .is_none()
+    {
+        offset = offset + 2 as f64;
+    }
+    let end = pos + offset as usize;
     background_content.truncate(offset as usize);
     let mut result = StyledString::new();
     result.append_plain(background_content);

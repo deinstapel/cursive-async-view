@@ -2,13 +2,13 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crossbeam::channel::{self, Receiver, Sender, TryRecvError};
+use cursive::align::HAlign;
 use cursive::direction::Direction;
 use cursive::event::{AnyCb, Event, EventResult};
 use cursive::theme::PaletteColor;
 use cursive::utils::markup::StyledString;
 use cursive::view::{Selector, View};
 use cursive::views::TextView;
-use cursive::align::HAlign;
 use cursive::{Cursive, Printer, Rect, Vec2};
 use interpolation::Ease;
 use num::clamp;
@@ -173,25 +173,32 @@ pub fn default_error(
 
     let duration = 60; // one second
     let durationf = duration as f64;
-    let cycle = if error_idx % duration > duration / 2 { duration } else { 0 };
+    let cycle = if error_idx % duration > duration / 2 {
+        duration
+    } else {
+        0
+    };
 
     let idx = frame_idx - (error_idx / duration) * duration;
     let idxf = idx as f64;
     let factor = idxf / durationf;
     let begin_factor = clamp((factor % 1.0).circular_in_out(), 0.0, 1.0);
     let end_factor = clamp(((factor + 0.25) % 1.0).circular_in_out() * 2.0, 0.0, 1.0);
-    let begin = (begin_factor * width as f64) as usize;
+    let mut begin = (begin_factor * width as f64) as usize;
     let end = (end_factor * width as f64) as usize;
     if frame_idx == cycle + duration {
         // Text can be fully shown
         return AnimationFrame {
             content: StyledString::plain(msg),
             next_frame_idx: frame_idx,
-        }
+        };
     }
 
     let mut result = StyledString::default();
     if end >= begin && idx > cycle {
+        if msg.as_str().get(0..begin).is_none() {
+            begin = begin + 2;
+        }
         msg.truncate(begin);
         result.append_plain(msg);
         result.append_styled(utils::repeat_str(symbol, end - begin), foreground);
@@ -201,6 +208,9 @@ pub fn default_error(
         result.append_styled(utils::repeat_str(symbol, end - begin), foreground);
         result.append_styled(utils::repeat_str(symbol, width - end), background);
     } else if idx > cycle + duration / 2 {
+        if msg.as_str().get(0..begin).is_none() {
+            begin = begin + 2
+        }
         msg.truncate(begin);
         result.append_plain(msg);
         result.append_styled(utils::repeat_str(symbol, width - begin), foreground);
@@ -437,11 +447,11 @@ impl<T: View> AsyncView<T> {
     /// function.
     pub fn with_error_fn<F>(self, error_fn: F) -> Self
     where
-    // We cannot use a lifetime bound to the AsyncView struct because View has a
-    //  'static requirement. Therefore we have to make sure the error_fn is
-    // 'static, meaning it owns all values and does not reference anything
-    // outside of its scope. In practice this means all animation_fn must be
-    // `move |width| {...}` or fn's.
+        // We cannot use a lifetime bound to the AsyncView struct because View has a
+        //  'static requirement. Therefore we have to make sure the error_fn is
+        // 'static, meaning it owns all values and does not reference anything
+        // outside of its scope. In practice this means all animation_fn must be
+        // `move |width| {...}` or fn's.
         F: Fn(&str, usize, usize, usize, usize) -> AnimationFrame + 'static,
     {
         Self {

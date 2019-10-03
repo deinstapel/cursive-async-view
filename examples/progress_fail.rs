@@ -15,14 +15,14 @@ fn main() {
 
     let async_view = AsyncProgressView::new(&mut siv, move || {
         if start.elapsed().as_secs() > 2 {
-            AsyncProgressState::Error("Oh no, the view could not be loaded!".to_string())
+            AsyncProgressState::Error("⌛ Timeout, the view took too long to load.".to_string())
         } else if start.elapsed().as_secs() < 7 {
             AsyncProgressState::Pending(1f32 / 7f32 * start.elapsed().as_secs() as f32)
         } else {
             AsyncProgressState::Available(TextView::new("Yay, the content has loaded!"))
         }
     })
-    .with_width(40);
+    .with_width(50);
 
     let dialog = Dialog::around(async_view).button("Ok", |s| s.quit());
 

@@ -17,7 +17,7 @@ fn main() {
         if start.elapsed().as_secs() < 5 {
             AsyncProgressState::Pending(1f32 / 5f32 * start.elapsed().as_secs() as f32)
         } else {
-            AsyncProgressState::Available(TextView::new("Yay, the content has loaded!"))
+            AsyncProgressState::Available(TextView::new("🦀 Yay, the content has loaded! 🦀"))
         }
     })
     .with_width(40);
