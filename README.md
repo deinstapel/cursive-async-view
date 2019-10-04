@@ -131,6 +131,10 @@ siv.add_layer(async_view);
 // siv.run();
 ```
 
+## Changelog
+
+The changelog is located in a [separate file](./CHANGELOG.md) and contains changes and migration hints for upcoming versions.
+
 ## Troubleshooting
 
 If you find any bugs/unexpected behaviour or you have a proposition for future changes open an issue describing the current behaviour and what you expected.
