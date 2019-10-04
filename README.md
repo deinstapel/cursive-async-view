@@ -30,8 +30,6 @@
 
 This project provides a wrapper view with a loading screen for [gyscos/cursive](https://github.com/gyscos/cursive) views. The loading screen will disappear once the wrapped view is fully loaded. This is useful for displaying views which may take long to construct or depend on e.g. the network.
 
-> WARNING: This crate currently requires all views to be `Send` which is not the case for most cursive views. We are currently working on a thread-less implementation of this crate. This will remove the `Send` requirement. However, the public API will change drastically. Prepare for breaking changes when using this crate.
-
 ## How does it look like? `demo` [![terminalizer](https://img.shields.io/badge/GIF-terminalizer-blueviolet.svg)](https://github.com/faressoft/terminalizer)
 
 <details>
