@@ -4,7 +4,7 @@
 
 ### :book: Conceptual Changes
 
-Version 0.2.0 reworks how `cursive-async-view` works at its core. Instead of spawning a separate thread to execute the creator in, it now runs a given `poll_ready` callback every event loop to let it check from different sources if the view can be created.
+Version 0.2.0 reworks how `cursive-async-view` works at it core. Instead of spawning a separate thread to execute the creator in, it now runs a given `poll_ready` callback every event loop to let it check from different sources if the view can be created.
 If this is the case the view is returned in an `AsyncState`, which itself is an enum indicating the different states the creation may have.  
 Note that `poll_ready` is called until it resolves into either `AsyncState::Available` or `AsyncState::Error`.
 
@@ -15,11 +15,9 @@ All this is done to avoid requiring views to implement the `Send` trait. The chi
 #### AsyncView
 
  - `AsyncView::new` has been changed to use a `poll_ready` callback to accomodate working without threads, returning an `AsyncState` instead of the view.
- - `AsyncView::new_with_bg_creator` is a convenience wrapper for `AsyncView::new` where a worker thread is spawned for a data creation function (`bg_task`). The produced data is passed to a view creation function which creates the view on the cursive thread. Further explanation is below.
  - `AsyncView::with_error_fn` & `AsyncView::set_error_fn` have been added, allowing the modification of the newly introduced error animation, in case the view creation fails.
  
 #### AsyncProgressView
-
 `AsyncProgressView` has been changed in a similar manner, again to allow creating views in the cursive thread
  - In `AsyncProgressView::new` `poll_ready` has been modified to return `AsyncProgressState` instead of the created view, and no longer receives a `Sender` as parameter. `AsyncProgressState` is quite similar to `AsyncState` as it has `Available`, `Error(String)` and `Pending(...)` variant but the pending has been extended to take a value of type `f32`, which indicates the progress that has been made.
  - The signature of the `progress_fn` has been changed to allow more complex animations!
@@ -49,7 +47,7 @@ siv.add_layer(async_view);
 siv.run();
 ```
 
-We can do this by splitting our creation function into to two. One that creates the data (a string with the content `"Yay, the content has loaded!"`) and one that creates the view (TextView).
+We can do this by splitting our creation function into to two one that creates the data (a String with the content "Yay, the content has loaded!") and one that creates the view (TextView).
 For situation like this where we have a creator for our data, and one for our view, we can use `new_with_bg_creator` for an easier creation.
 
 ```rust
@@ -101,7 +99,7 @@ siv.run();
 Similar to `AsyncView` `AsyncProgressView` also needs to be migrated by hand, since breaking API Changes took place.
 The return type of the `poll_ready` has been changed to `AsyncProgressState`. The values are explained in `API Changes`.
 
-```rust 
+```rust
 use crossbeam::Sender;
 use cursive::{views::TextView, Cursive};
 use cursive_async_view::AsyncProgressView;
@@ -129,7 +127,7 @@ As we saw in the changes, we no longer receive a `Sender` in our `poll_ready` in
 
 And also in this application it is important that we split up our creation from the blocking part (in this example simply waiting) and the view creation (TextView).
 
-```rust 
+```rust
 use cursive::{views::TextView, Cursive};
 use cursive_async_view::{AsyncProgressView, AsyncProgressState};
 use crossbeam::unbounded;
