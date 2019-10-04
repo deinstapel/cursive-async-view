@@ -31,7 +31,7 @@ fn main() {
         // we want to inform that something is wrong after 5 seconds
         if start_time.elapsed() > Duration::from_secs(5) {
             // ideally, we should stop the calc thread here, but meh...
-            AsyncState::Error("⌛ Oh no, the view has timed out!".to_string())
+            AsyncState::Error("Oh no, the view has timed out!".to_string())
         } else {
             // let's see if the view is available
             match rx.try_recv() {
@@ -43,7 +43,7 @@ fn main() {
 
                 // noooooo, my mighty channel
                 Err(TryRecvError::Disconnected) => {
-                    AsyncState::Error("🔥 Shoot, view creation thread exited...".to_string())
+                    AsyncState::Error("Shoot, view creation thread exited...".to_string())
                 }
             }
         }

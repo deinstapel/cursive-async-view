@@ -26,16 +26,16 @@
 
 ---
 
-> This project is work-in-progress
-
 This project provides a wrapper view with a loading screen for [gyscos/cursive](https://github.com/gyscos/cursive) views. The loading screen will disappear once the wrapped view is fully loaded. This is useful for displaying views which may take long to construct or depend on e.g. the network.
 
 ## How does it look like? `demo` [![terminalizer](https://img.shields.io/badge/GIF-terminalizer-blueviolet.svg)](https://github.com/faressoft/terminalizer)
 
 <details>
   <summary>Expand to view</summary>
-  <img src="assets/async-view-loading.gif" alt="async-view-loading demo">
-  <img src="assets/async-view-progress.gif" alt="async-view-progress demo">
+  <img src="assets/async-view-simple.gif" alt="async-view-simple demo" width="440">
+  <img src="assets/async-view-progress.gif" alt="async-view-progress demo" width="440">
+  <img src="assets/async-view-timeout.gif" alt="async-view-timeout demo" width="440">
+  <img src="assets/async-view-progress-fail.gif" alt="async-view-progress-fail demo" width="440">
 </details>
 
 ## Usage

@@ -2,7 +2,7 @@
 # like `/bin/bash -l`, `ls`, or any other commands
 # the default is bash for Linux
 # or powershell.exe for Windows
-command: ../target/debug/examples/simple
+command: ../target/debug/examples/timeout
 
 # Specify the current working directory path
 # the default is the current working directory path
@@ -73,7 +73,7 @@ cursorStyle: block
 # Font family
 # You can use any font that is installed on your machine
 # in CSS-like syntax
-fontFamily: "Hack"
+fontFamily: "Hack, Twemoji"
 
 # The size of the font
 fontSize: 12

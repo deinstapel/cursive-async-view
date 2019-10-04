@@ -9,7 +9,7 @@ config:
   
   # Specify the current working directory path
   # the default is the current working directory path
-  cwd: /home/jwuensch/Projects/cursive-async-view/assets
+  cwd: /home/fin/Development/github/cursive-async-view/assets
   
   # Export additional ENV variables
   env:
@@ -76,7 +76,7 @@ config:
   # Font family
   # You can use any font that is installed on your machine
   # in CSS-like syntax
-  fontFamily: "Hack"
+  fontFamily: "Hack, Twemoji"
   
   # The size of the font
   fontSize: 12
@@ -111,19 +111,31 @@ config:
   
 # Records, feel free to edit them
 records:
-  - delay: 397
-    content: "\e[?1049h\e[22;0;0t\e[1;24r\e(B\e[m\e[4l\e[?7h\e[?1h\e=\e[?1006;1000h\e[39;49m\e[?25l\e[?1002h\e[39;49m\e[34m\e[44m\e[H\e[2J\e[16d\e[J\e[H\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\e[11;36H\e[1K \e[30m\e[47m┌──────┐\e[34m\e[44m\e[K\e[12;36H\e[1K \e[30m\e[47m│      │\e[30m\e[40m \e[34m\e[44m\e[K\e[13;36H\e[1K \e[30m\e[47m│ \e[37m\e[41m<Ok>\e[30m\e[47m │\e[30m\e[40m \e[34m\e[44m\e[K\e[14;36H\e[1K \e[30m\e[47m└──────┘\e[30m\e[40m \e[34m\e[44m\e[K\e[15;37H\e[1K \e[30m\e[40m        \e[34m\e[44m\e[K\e[13d\b\e[39;49m\e(B\e[m"
-  - delay: 54
-    content: "\e[34m\e[44m\e[H\e[2J\e[16d\e[J\e[H\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\e[10;18H\e[1K \e[30m\e[47m┌──────────────────────────────────────────┐\e[34m\e[44m\e[K\e[11;18H\e[1K \e[30m\e[47m│ \e[34m\e[47m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[30m\e[47m │\e[30m\e[40m \e[34m\e[44m\e[K\e[12;18H\e[1K \e[30m\e[47m│\e[42X\e[12;62H│\e[30m\e[40m \e[34m\e[44m\e[K\e[13;18H\e[1K \e[30m\e[47m│\e[37X\e[13;57H\e[37m\e[41m<Ok>\e[30m\e[47m │\e[30m\e[40m \e[34m\e[44m\e[K\e[14;18H\e[1K \e[30m\e[47m└──────────────────────────────────────────┘\e[30m\e[40m \e[34m\e[44m\e[K\e[15;19H\e[1K \e[30m\e[40m\e[44X\e[15;64H\e[34m\e[44m\e[K\e[13d\b\e[39;49m\e(B\e[m"
-  - delay: 943
-    content: "\e[11;21H\e[31m\e[47m━━━━━━━━\e[13;63H\e[39;49m\e(B\e[m"
-  - delay: 1005
-    content: "\e[11;29H\e[31m\e[47m━━━━━━━━\e[13;63H\e[39;49m\e(B\e[m"
-  - delay: 1006
-    content: "\e[11;37H\e[31m\e[47m━━━━━━━━\e[13;63H\e[39;49m\e(B\e[m"
-  - delay: 1007
-    content: "\e[11;45H\e[31m\e[47m━━━━━━━━\e[13;63H\e[39;49m\e(B\e[m"
-  - delay: 1003
-    content: "\e[34m\e[44m\e[H\e[2J\e[16d\e[J\e[H\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\e[10;24H\e[1K \e[30m\e[47m┌──────────────────────────────┐\e[34m\e[44m\e[K\e[11;24H\e[1K \e[30m\e[47m│ Yay, the content has loaded! │\e[30m\e[40m \e[34m\e[44m\e[K\e[12;24H\e[1K \e[30m\e[47m│\e[30X\e[12;56H│\e[30m\e[40m \e[34m\e[44m\e[K\e[13;24H\e[1K \e[30m\e[47m│\e[25X\e[13;51H\e[37m\e[41m<Ok>\e[30m\e[47m │\e[30m\e[40m \e[34m\e[44m\e[K\e[14;24H\e[1K \e[30m\e[47m└──────────────────────────────┘\e[30m\e[40m \e[34m\e[44m\e[K\e[15;25H\e[1K \e[30m\e[40m\e[32X\e[15;58H\e[34m\e[44m\e[K\e[13d\b\e[39;49m\e(B\e[m"
-  - delay: 1889
+  - delay: 486
+    content: "\e[?1049h\e[22;0;0t\e[1;24r\e(B\e[m\e[4l\e[?7h\e[?1h\e=\e[?1006;1000h\e[39;49m\e[?25l\e[?1002h\e[39;49m\e[34m\e[44m\e[H\e[2J\e[16d\e[J\e[H\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\e[10;18H\e[1K \e[30m\e[47m┌──────────────────────────────────────────┐\e[34m\e[44m\e[K\e[11;18H\e[1K \e[30m\e[47m│ \e[34m\e[47m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\e[30m\e[47m │\e[30m\e[40m \e[34m\e[44m\e[K\e[12;18H\e[1K \e[30m\e[47m│\e[42X\e[12;62H│\e[30m\e[40m \e[34m\e[44m\e[K\e[13;18H\e[1K \e[30m\e[47m│\e[37X\e[13;57H\e[37m\e[41m<Ok>\e[30m\e[47m │\e[30m\e[40m \e[34m\e[44m\e[K\e[14;18H\e[1K \e[30m\e[47m└──────────────────────────────────────────┘\e[30m\e[40m \e[34m\e[44m\e[K\e[15;19H\e[1K \e[30m\e[40m\e[44X\e[15;64H\e[34m\e[44m\e[K\e[13d\b\e[39;49m\e(B\e[m"
+  - delay: 1012
+    content: "\e[11;21H\e[31m\e[47m━━━\e[13;63H\e[39;49m\e(B\e[m"
+  - delay: 31
+    content: "\e[11;24H\e[31m\e[47m━━\e[13;63H\e[39;49m\e(B\e[m"
+  - delay: 31
+    content: "\e[11;26H\e[31m\e[47m━\e[13;63H\e[39;49m\e(B\e[m"
+  - delay: 31
+    content: "\e[11;27H\e[31m\e[47m━\e[13;63H\e[39;49m\e(B\e[m"
+  - delay: 918
+    content: "\e[11;28H\e[31m\e[47m━━━━━\e[13;63H\e[39;49m\e(B\e[m"
+  - delay: 30
+    content: "\e[11;33H\e[31m\e[47m━━\e[13;63H\e[39;49m\e(B\e[m"
+  - delay: 31
+    content: "\e[11;35H\e[31m\e[47m━\e[13;63H\e[39;49m\e(B\e[m"
+  - delay: 922
+    content: "\e[11;36H\e[31m\e[47m━━━━━━\e[13;63H\e[39;49m\e(B\e[m"
+  - delay: 30
+    content: "\e[11;42H\e[31m\e[47m━━\e[13;63H\e[39;49m\e(B\e[m"
+  - delay: 980
+    content: "\e[11;44H\e[31m\e[47m━━━━━━\e[13;63H\e[39;49m\e(B\e[m"
+  - delay: 31
+    content: "\e[11;50H\e[31m\e[47m━━\e[13;63H\e[39;49m\e(B\e[m"
+  - delay: 981
+    content: "\e[34m\e[44m\e[H\e[2J\e[16d\e[J\e[H\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\n\e[K\e[10;21H\e[1K \e[30m\e[47m┌────────────────────────────────────┐\e[34m\e[44m\e[K\e[11;21H\e[1K \e[30m\e[47m│ \U0001F980  Yay, the content has loaded! \U0001F980  │\e[30m\e[40m \e[34m\e[44m\e[K\e[12;21H\e[1K \e[30m\e[47m│\e[36X\e[12;59H│\e[30m\e[40m \e[34m\e[44m\e[K\e[13;21H\e[1K \e[30m\e[47m│\e[31X\e[13;54H\e[37m\e[41m<Ok>\e[30m\e[47m │\e[30m\e[40m \e[34m\e[44m\e[K\e[14;21H\e[1K \e[30m\e[47m└────────────────────────────────────┘\e[30m\e[40m \e[34m\e[44m\e[K\e[15;22H\e[1K \e[30m\e[40m\e[38X\e[15;61H\e[34m\e[44m\e[K\e[13d\b\e[39;49m\e(B\e[m"
+  - delay: 4697
     content: "\e[?1002l\e[?1006;1000l\e[24;1H\e[?12l\e[?25h\e[?1049l\e[23;0;0t\r\e[?1l\e>"
