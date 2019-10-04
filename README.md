@@ -32,10 +32,10 @@ This project provides a wrapper view with a loading screen for [gyscos/cursive](
 
 <details>
   <summary>Expand to view</summary>
-  <img src="assets/async-view-simple.gif" alt="async-view-simple demo" width="440">
-  <img src="assets/async-view-progress.gif" alt="async-view-progress demo" width="440">
-  <img src="assets/async-view-timeout.gif" alt="async-view-timeout demo" width="440">
-  <img src="assets/async-view-progress-fail.gif" alt="async-view-progress-fail demo" width="440">
+  <img src="assets/async-view-simple.gif" alt="async-view-simple demo" width="430">
+  <img src="assets/async-view-progress.gif" alt="async-view-progress demo" width="430">
+  <img src="assets/async-view-timeout.gif" alt="async-view-timeout demo" width="430">
+  <img src="assets/async-view-progress-fail.gif" alt="async-view-progress-fail demo" width="430">
 </details>
 
 ## Usage
