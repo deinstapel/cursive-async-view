@@ -1,85 +1,39 @@
 extern crate cursive_async_view;
 
-use cursive::{self, views::Dialog, views::TextView, Cursive};
-use cursive_async_view::AsyncView;
+use std::time::{Instant, Duration};
 
-/*const CAR: &str = "
-    ▄█████████████▄
-   ▄██▀▀▀▀██▀▀▀▀████▄
-  ▄██▀    ██     ▀████▄
- ▄███▄▄▄▄▄██▄▄▄▄▄▄▄█████▄
-███████████████████████████▄
-████████████████████████████
-██████▀▀████████████▀▀██████
-▀▀▀██    ██▀▀▀▀▀▀██    ██▀▀▀
-   ███▄▄███      ███▄▄███
-     ▀▀▀▀          ▀▀▀▀
-";
-const CAR_WIDTH: usize = 28;
-
-fn get_animation() -> Vec<StyledString> {
-    let width = WIDTH + CAR_WIDTH;
-
-    (0..width + 1)
-        .map(|x| {
-            let ip = if x as f64 <= width as f64 / 2.0 {
-                (x as f64 / (width as f64 / 2.0)).circular_out() / 2.0
-            } else {
-                ((x - width / 2) as f64 / (width as f64 / 2.0)).circular_in() / 2.0 + 1.0.circular_out() / 2.0
-            };
-            (ip * width as f64) as usize
-        })
-        .map(|f| {
-            let mut result = StyledString::default();
-            for line in CAR.lines() {
-                if f == 0 || f == width{
-                    result.append_plain(format!(
-                        "{}\n",
-                        repeat_str(" ", WIDTH),
-                    ));
-                } else if f < CAR_WIDTH {
-                    result.append_plain(format!(
-                        "{}{}\n",
-                        chop::substr(line, CAR_WIDTH - f, 0),
-                        repeat_str(" ", width - f - CAR_WIDTH),
-                    ));
-                } else if f >= WIDTH {
-                    result.append_plain(format!(
-                        "{}{}\n",
-                        repeat_str(" ", f - CAR_WIDTH),
-                        chop::substr(line, 0, CAR_WIDTH - (f - WIDTH)),
-                    ));
-                } else {
-                    result.append_plain(format!(
-                        "{}{}{}\n",
-                        repeat_str(" ", f - CAR_WIDTH),
-                        line,
-                        repeat_str(" ", width - f - CAR_WIDTH),
-                    ));
-                }
-            }
-
-            result
-        })
-        .collect::<Vec<_>>()
-}*/
+use cursive::views::{Dialog, TextView};
+use cursive::Cursive;
+use cursive_async_view::{AsyncState, AsyncView};
 
 fn main() {
-    cursive::logger::init();
-
     let mut siv = Cursive::default();
 
     // We can quit by pressing `q`
     siv.add_global_callback('q', Cursive::quit);
 
-    let async_view = AsyncView::new(&siv, move || {
-        std::thread::sleep(std::time::Duration::from_secs(10));
-        TextView::new("Yay!\n\nThe content has loaded!               ")
-    })
-    .with_width(40);
+    let start_time = Instant::now();
+    let async_view = AsyncView::new(&mut siv, move || {
+        // This function will be called several times.
+        // It should signal `Available` when the view is available for drawing.
 
-    let dialog = Dialog::around(async_view).button("Ok", |s| s.quit());
+        // Do not run heavy calculations here!
+        // Instead look if the calculation is ready.
+        if start_time.elapsed() > Duration::from_secs(5) {
+            // we are ready to display the content
+            AsyncState::Available(
+                TextView::new("Krawoombah! Async loading is working 🦀")
+            )
+        } else {
+            // still waiting for five seconds to pass
+            AsyncState::Pending
+        }
+    });
 
+    // dialogs are cool, so let's use one!
+    let dialog = Dialog::around(async_view.with_width(40)).button("Ok", |s| s.quit());
     siv.add_layer(dialog);
+
+    // the loneliness of the long distance runner
     siv.run();
 }

@@ -26,18 +26,16 @@
 
 ---
 
-> This project is work-in-progress
-
 This project provides a wrapper view with a loading screen for [gyscos/cursive](https://github.com/gyscos/cursive) views. The loading screen will disappear once the wrapped view is fully loaded. This is useful for displaying views which may take long to construct or depend on e.g. the network.
-
-> WARNING: This crate currently requires all views to be `Send` which is not the case for most cursive views. We are currently working on a thread-less implementation of this crate. This will remove the `Send` requirement. However, the public API will change drastically. Prepare for breaking changes when using this crate.
 
 ## How does it look like? `demo` [![terminalizer](https://img.shields.io/badge/GIF-terminalizer-blueviolet.svg)](https://github.com/faressoft/terminalizer)
 
 <details>
   <summary>Expand to view</summary>
-  <img src="assets/async-view-loading.gif" alt="async-view-loading demo">
-  <img src="assets/async-view-progress.gif" alt="async-view-progress demo">
+  <img src="assets/async-view-simple.gif" alt="async-view-simple demo" width="430">
+  <img src="assets/async-view-progress.gif" alt="async-view-progress demo" width="430">
+  <img src="assets/async-view-timeout.gif" alt="async-view-timeout demo" width="430">
+  <img src="assets/async-view-progress-fail.gif" alt="async-view-progress-fail demo" width="430">
 </details>
 
 ## Usage
@@ -51,23 +49,63 @@ cursive-async-view = "^0"
 
 ### Asynchronous view loading without progress information
 
-If you can't tell the progress during a long taking creation of a view, you may
-wrap the creation of this view in an `AsyncView`. This will display a loading
-animation until the inner view is ready to be drawn.
+If you can't tell the progress during a long taking preparation of data for
+a view, you may wrap the creation of this view in an `AsyncView`. This will
+display a loading animation until the inner view is ready to be drawn.
 
 ```rust
+use std::time::{Instant, Duration};
 use cursive::{views::TextView, Cursive};
-use cursive_async_view::AsyncView;
+use cursive_async_view::{AsyncView, AsyncState};
 
 let mut siv = Cursive::default();
-let async_view = AsyncView::new(&siv, move || {
-    std::thread::sleep(std::time::Duration::from_secs(10));
-    TextView::new("Yay!\n\nThe content has loaded!")
+let instant = Instant::now();
+let async_view = AsyncView::new(&mut siv, move || {
+    if instant.elapsed() > Duration::from_secs(10) {
+        AsyncState::Available(
+            TextView::new("Yay!\n\nThe content has loaded!")
+        )
+    } else {
+        AsyncState::Pending
+    }
 });
 
 siv.add_layer(async_view);
-siv.run();
+// siv.run();
 ```
+
+Refer to the `AsyncView` struct level documentation for a detailed
+explanation or to the `simple` example located in the source code
+repository.
+
+If you need to do a blocking operation during the construction of the child
+view, you may have a look at the alternate `new_with_bg_task` constructor.
+
+```rust
+use std::thread;
+use std::time::Duration;
+
+use cursive::views::TextView;
+use cursive::Cursive;
+use cursive_async_view::AsyncView;
+
+let mut siv = Cursive::default();
+let async_view = AsyncView::new_with_bg_creator(&mut siv, move || {
+    // this function is executed in a background thread, so we can block
+    // here as long as we like
+    thread::sleep(Duration::from_secs(10));
+
+    // enough blocking, let's show the content
+    Ok("Yeet! It worked 🖖")
+}, TextView::new); // create a text view from the string
+
+siv.add_layer(async_view);
+// siv.run();
+```
+
+Refer to the `AsyncView` struct level documentation for a detailed
+explanation or to the `bg_task` example located in the source code
+repository.
 
 ### Asynchronous view loading with a progress bar
 
@@ -75,29 +113,27 @@ If you have information about the progress a long taking view creation has made,
 you can wrap the creation in an `AsyncProgressView`. This will display a progress
 bar until the inner view is ready to be drawn.
 
-```rust
-use crossbeam::Sender;
+```
 use cursive::{views::TextView, Cursive};
-use cursive_async_view::AsyncProgressView;
+use cursive_async_view::{AsyncProgressView, AsyncProgressState};
 
 let mut siv = Cursive::default();
-let async_view = AsyncProgressView::new(&siv, |s: Sender<f32>| {
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    s.send(0.2).unwrap();
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    s.send(0.4).unwrap();
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    s.send(0.6).unwrap();
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    s.send(0.8).unwrap();
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    s.send(1.0).unwrap();
-    TextView::new("Yay, the content has loaded!")
+let start = std::time::Instant::now();
+let async_view = AsyncProgressView::new(&mut siv, move || {
+    if start.elapsed().as_secs() < 3 {
+        AsyncProgressState::Pending(start.elapsed().as_secs() as f32 / 3f32)
+    } else {
+        AsyncProgressState::Available(TextView::new("Finally it loaded!"))
+    }
 });
 
 siv.add_layer(async_view);
-siv.run();
+// siv.run();
 ```
+
+## Changelog
+
+The changelog is located in a [separate file](./CHANGELOG.md) and contains changes and migration hints for upcoming versions.
 
 ## Troubleshooting
 
@@ -111,7 +147,7 @@ If you find any bugs/unexpected behaviour or you have a proposition for future c
 
 Just run
 
-```
+```plain
 $ cargo test
 ```
 

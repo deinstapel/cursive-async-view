@@ -1,47 +1,58 @@
-use cursive::{Cursive, views::{Dialog, TextView}};
-use cursive_async_view::AsyncView;
+use cursive::{
+    views::{Dialog, TextView},
+    Cursive,
+};
+use cursive_async_view::{AsyncState, AsyncView};
+use std::sync::mpsc::{channel, TryRecvError};
 use std::time::{Duration, Instant};
-use std::sync::mpsc::channel;
-
-// To implement a timeout for your creation you can easily spawn a thread in your creator
-// function and use a channel to send yourself the created view back to your creator function.
-// The `std::time` structs are well usable here to check if our creation has took too long e.g.
-// in the case our creation has to wait for some pending operations which are not completed in the near future.
-
 
 fn main() {
     let mut siv = Cursive::default();
-    let loading_view = AsyncView::new(&siv, || {
-        let start_time = Instant::now();
 
-        // We want to wait exactly 5 seconds
-        let timeout = Duration::from_secs(5);
-        // Create channel to send our view over it
-        let (sx,rx) = channel();
+    // We can quit by pressing `q`
+    siv.add_global_callback('q', Cursive::quit);
 
+    // remember when we started calculation, to check for the timeout
+    let start_time = Instant::now();
 
-        // Do some very instensive but important stuff here!
-        std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_secs(20));
-            sx.send(TextView::new("Content has loaded!")).unwrap();
-        });
-        loop {
+    // create channel to send our view over it
+    let (tx, rx) = channel();
+
+    // do some very instensive but important stuff here!
+    std::thread::spawn(move || {
+        // calc calc calc
+        std::thread::sleep(Duration::from_secs(20));
+
+        // as TextView implements `Send` we can send it between threads :)
+        tx.send(TextView::new("Content has loaded!")).ok();
+    });
+
+    let loading_view = AsyncView::new(&mut siv, move || {
+        // we want to inform that something is wrong after 5 seconds
+        if start_time.elapsed() > Duration::from_secs(5) {
+            // ideally, we should stop the calc thread here, but meh...
+            AsyncState::Error("Oh no, the view has timed out!".to_string())
+        } else {
+            // let's see if the view is available
             match rx.try_recv() {
-                Ok(view) => {
-                    // Wohoo we received our view
-                    return view
-                },
-                Err(_) => {
-                    let current_time = Instant::now();
-                    // If our creation takes too long we just abort it
-                    if current_time.duration_since(start_time) > timeout {
-                        return TextView::new("Oh no, the view has timed out!")
-                    }
-                },
+                // yeet, it's there!
+                Ok(view) => AsyncState::Available(view),
+
+                // duh, still pending. Let's try another time...
+                Err(TryRecvError::Empty) => AsyncState::Pending,
+
+                // noooooo, my mighty channel
+                Err(TryRecvError::Disconnected) => {
+                    AsyncState::Error("Shoot, view creation thread exited...".to_string())
+                }
             }
         }
-    }).with_width(40);
+    })
+    .with_width(40);
 
-    siv.add_layer(Dialog::around(loading_view).button("Ok", |s| {s.quit()}));
+    // be fancy, add a dialog!
+    siv.add_layer(Dialog::around(loading_view).button("Ok", |s| s.quit()));
+
+    // run Forest, run!!
     siv.run();
 }

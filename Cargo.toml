@@ -18,6 +18,9 @@ log = "0.4.8"
 interpolation = "0.2.0"
 crossbeam = "0.7.2"
 num = "0.2.0"
+send_wrapper = "0.2.0"
+lazy_static = "1.4.0"
+doc-comment = "0.3.1"
 
 [badges]
 travis-ci = { repository = "deinstapel/cursive-async-view" }

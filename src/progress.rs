@@ -1,6 +1,4 @@
-use std::thread;
-
-use crossbeam::channel::{self, Receiver, Sender};
+use crossbeam::channel::{unbounded, Receiver, Sender};
 use cursive::direction::Direction;
 use cursive::event::{AnyCb, Event, EventResult};
 use cursive::theme::PaletteColor;
@@ -8,9 +6,35 @@ use cursive::utils::markup::StyledString;
 use cursive::view::{Selector, View};
 use cursive::views::TextView;
 use cursive::{Cursive, Printer, Rect, Vec2};
+use interpolation::Ease;
 use num::clamp;
+use send_wrapper::SendWrapper;
 
-use crate::utils;
+use std::thread;
+use std::time::{Duration, Instant};
+
+use crate::{infinite::FPS, utils};
+
+/// An enum to be returned by the `poll_ready` callback, with additional information about the creation progress.
+pub enum AsyncProgressState<V: View> {
+    /// Indicates a not completed creation, which is still ongoing. Also reports the progress made as float value between 0 and 1.
+    Pending(f32),
+    /// Indicates a not completed creation, which cannot proceed further. Contains an error message to be displayed for the user.
+    Error(String),
+    /// Indicates a completed creation. Contains the new child view.
+    Available(V),
+}
+
+
+/// This struct contains the content of a single frame for `AsyncProgressView` with some metadata about the current frame.
+pub struct AnimationProgressFrame {
+    /// Stylized String which gets printed until the view is ready, or if the creation has failed.
+    pub content: StyledString,
+    /// Current position of the loading bar.
+    pub pos: usize,
+    /// Index of the next frame to be drawn, useful if you want to interpolate between two states of progress.
+    pub next_frame_idx: usize,
+}
 
 /// The default progress animation for a `AsyncProgressView`.
 ///
@@ -23,29 +47,30 @@ use crate::utils;
 /// use cursive::Cursive;
 /// use cursive::views::TextView;
 /// use cursive::utils::markup::StyledString;
-/// use cursive_async_view::AsyncProgressView;
+/// use cursive_async_view::{AnimationProgressFrame, AsyncProgressView, AsyncProgressState};
 ///
 /// fn my_progress_function(
 ///     _width: usize,
 ///     _height: usize,
 ///     progress: f32,
-/// ) -> StyledString {
-///     StyledString::plain(format!("{:.0}%", progress * 100.0))
+///     _pos: usize,
+///     frame_idx: usize,
+/// ) -> AnimationProgressFrame {
+///     AnimationProgressFrame {
+///         content: StyledString::plain(format!("{:.0}%", progress * 100.0)),
+///         pos: 0,
+///         next_frame_idx: frame_idx,
+///     }
 /// }
 ///
 /// let mut siv = Cursive::default();
-/// let async_view = AsyncProgressView::new(&siv, |s: Sender<f32>| {
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.2).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.4).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.6).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.8).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(1.0).unwrap();
-///     TextView::new("Yay, the content has loaded!")
+/// let start = std::time::Instant::now();
+/// let async_view = AsyncProgressView::new(&mut siv, move || {
+///     if start.elapsed().as_secs() > 5 {
+///         AsyncProgressState::Pending(start.elapsed().as_secs() as f32 /5f32)
+///     } else {
+///         AsyncProgressState::Available(TextView::new("Loaded!"))
+///     }
 /// })
 /// .with_progress_fn(my_progress_function);
 /// ```
@@ -54,7 +79,14 @@ use crate::utils;
 ///
 /// The `width` and `height` parameters contain the maximum size the content may have
 /// (in characters). The `progress` parameter is guaranteed to be a `f32` between 0 and 1.
-pub fn default_progress(width: usize, _height: usize, progress: f32) -> StyledString {
+/// The `pos` and `frame_idx` parameter are always from the animation frame of the previous iteration.
+pub fn default_progress(
+    width: usize,
+    _height: usize,
+    progress: f32,
+    pos: usize,
+    frame_idx: usize,
+) -> AnimationProgressFrame {
     assert!(progress >= 0.0);
     assert!(progress <= 1.0);
 
@@ -62,73 +94,183 @@ pub fn default_progress(width: usize, _height: usize, progress: f32) -> StyledSt
     let background = PaletteColor::HighlightInactive;
     let symbol = "━";
 
-    let end = (progress * width as f32) as usize;
+    let duration = 30; //one second
+    let durationf = duration as f64;
+
+    let next_pos = width as f32 * progress;
+    let offset = next_pos as usize - pos;
+
+    let idx = frame_idx % duration;
+    let idxf = idx as f64;
+    let factor = (idxf / durationf).circular_out();
+    let end = (pos as f64 + offset as f64 * factor) as usize;
+
     let mut result = StyledString::new();
     result.append_styled(utils::repeat_str(symbol, end), foreground);
     result.append_styled(utils::repeat_str(symbol, width - end), background);
 
-    result
+    AnimationProgressFrame {
+        content: result,
+        pos: end,
+        next_frame_idx: idx + 1,
+    }
+}
+
+/// The default error animation for a `AsyncProgressView`.
+///
+/// # Creating your own error animation
+///
+/// The creation is very similar to the progress animation, but the error message is given now as the first parameter.
+///
+/// ```
+/// use crossbeam::Sender;
+/// use cursive::Cursive;
+/// use cursive::views::TextView;
+/// use cursive::utils::markup::StyledString;
+/// use cursive_async_view::{AnimationProgressFrame, AsyncProgressView, AsyncProgressState};
+///
+/// fn my_error_function(
+///     msg: String,
+///     _width: usize,
+///     _height: usize,
+///     progress: f32,
+///     _pos: usize,
+///     frame_idx: usize,
+/// ) -> AnimationProgressFrame {
+///     AnimationProgressFrame {
+///         content: StyledString::plain(format!("Error: {}", msg)),
+///         pos: 0,
+///         next_frame_idx: frame_idx,
+///     }
+/// }
+///
+/// let mut siv = Cursive::default();
+/// let start = std::time::Instant::now();
+/// let async_view = AsyncProgressView::new(&mut siv, move || {
+///     if start.elapsed().as_secs() > 5 {
+///         AsyncProgressState::Pending(start.elapsed().as_secs() as f32 /5f32)
+///     } else if true {
+///         AsyncProgressState::Error("Oh no, the view could not be loaded!".to_string())
+///     } else {
+///         AsyncProgressState::Available(TextView::new("I thought we never would get here!"))
+///     }
+/// })
+/// .with_error_fn(my_error_function);
+/// ```
+pub fn default_progress_error(
+    msg: String,
+    width: usize,
+    _height: usize,
+    progress: f32,
+    pos: usize,
+    frame_idx: usize,
+) -> AnimationProgressFrame {
+    assert!(progress >= 0.0);
+    assert!(progress <= 1.0);
+
+    let foreground = PaletteColor::Highlight;
+    let background = PaletteColor::HighlightInactive;
+    let symbol = "━";
+
+    let duration = 30; // half a second
+    let durationf = duration as f64;
+    let idx = frame_idx;
+    let idxf = idx as f64;
+    let factor = (idxf / durationf).circular_in_out();
+    let mut offset = width as f64 * factor;
+
+    let padding = width.saturating_sub(msg.len()) / 2;
+    let mut background_content = format!(
+        "{}{}{}",
+        utils::repeat_str(" ", padding),
+        msg,
+        utils::repeat_str(" ", padding),
+    );
+    // Check for non-char symbols
+    if background_content
+        .as_str()
+        .get(0..offset as usize)
+        .is_none()
+    {
+        offset = offset + 2 as f64;
+    }
+    let end = pos + offset as usize;
+    background_content.truncate(offset as usize);
+    let mut result = StyledString::new();
+    result.append_plain(background_content);
+    result.append_styled(
+        utils::repeat_str(symbol, {
+            if (pos + offset as usize) < width {
+                pos
+            } else {
+                width.saturating_sub(offset as usize)
+            }
+        }),
+        foreground,
+    );
+    result.append_styled(
+        utils::repeat_str(symbol, width.saturating_sub(end)),
+        background,
+    );
+
+    AnimationProgressFrame {
+        content: result,
+        pos: pos,
+        next_frame_idx: frame_idx + 1,
+    }
 }
 
 /// An `AsyncProgressView` is a wrapper view that displays a progress bar, until the
-/// child view is successfully created. The creation of the inner view is done on a
-/// dedicated thread. Therefore, it is necessary for the creation function to always
-/// return, otherwise the thread will get stuck.
+/// child view is successfully created or an error in the creation progress occured.
+///
+/// To achieve this a `poll_ready` callback is passed in the creation of `AsyncProgressView` which
+/// returns an `AsyncProgressState` that can indicate that the process is still `Pending` (this contains a float
+/// between 0 and 1, communicating the progress, this information is displayed in the bar), has been successfully
+/// completed `Available` containing the view to be displayed, or if the creation has thrown an `Error`
+/// containing a message to be shown to the user.
+///
+/// The `poll_ready` callback should only **check** for data to be
+/// available and create the child view when the data got available. It must
+/// **never** block until the data is available or do heavy calculations!
+/// Otherwise cursive cannot proceed displaying and your
+/// application will have a blocking loading process!
+///
+/// If you have troubles and need some more in-depth examples have a look at the provided `examples` in the project.
 ///
 /// # Example usage
 ///
 /// ```
-/// use crossbeam::Sender;
 /// use cursive::{views::TextView, Cursive};
-/// use cursive_async_view::AsyncProgressView;
+/// use cursive_async_view::{AsyncProgressView, AsyncProgressState};
 ///
 /// let mut siv = Cursive::default();
-/// let async_view = AsyncProgressView::new(&siv, |s: Sender<f32>| {
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.2).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.4).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.6).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(0.8).unwrap();
-///     std::thread::sleep(std::time::Duration::from_secs(1));
-///     s.send(1.0).unwrap();
-///     TextView::new("Yay, the content has loaded!")
+/// let start = std::time::Instant::now();
+/// let async_view = AsyncProgressView::new(&mut siv, move || {
+///     if start.elapsed().as_secs() < 3 {
+///         AsyncProgressState::Pending(start.elapsed().as_secs() as f32 / 3f32)
+///     } else {
+///         AsyncProgressState::Available(TextView::new("Finally it loaded!"))
+///     }
 /// });
 ///
 /// siv.add_layer(async_view);
 /// // siv.run();
 /// ```
 ///
-/// # Threads
-///
-/// The `new(siv, creator)` method will spawn 2 threads:
-///
-/// 1. `cursive-async-view::creator` The creation thread for the wrapped view.
-///    This thread will stop running as soon as the creation function returned.
-/// 2. `cursive-async-view::updater` The update thread waits for the creation
-///    function to signal progress and will be stopped by `AsyncProgressView`
-///    when the creation function returned and the new view is available for
-///    layouting.
-///
-/// The threads are labeled as indicated above.
-///
-/// # TODO
-///
-/// * make creation function return a result to mark an unsuccessful creation
-///
-pub struct AsyncProgressView<T: View + Send> {
-    view: Option<T>,
+pub struct AsyncProgressView<T: View> {
+    view: AsyncProgressState<T>,
     loading: TextView,
-    progress_fn: Box<dyn Fn(usize, usize, f32) -> StyledString + 'static>,
+    progress_fn: Box<dyn Fn(usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static>,
+    error_fn:
+        Box<dyn Fn(String, usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static>,
     width: Option<usize>,
     height: Option<usize>,
-    view_rx: Receiver<T>,
-    update_rx: Receiver<f32>,
+    view_rx: Receiver<AsyncProgressState<T>>,
+    frame_index: usize,
+    pos: usize,
 }
 
-impl<T: View + Send + Sized> AsyncProgressView<T> {
+impl<T: View> AsyncProgressView<T> {
     /// Create a new `AsyncProgressView` instance. The cursive reference is only used to
     /// update the screen when a progress update is received. In order to show the view,
     /// it has to be directly or indirectly added to a cursive layer like any other view.
@@ -136,51 +278,64 @@ impl<T: View + Send + Sized> AsyncProgressView<T> {
     /// The creator function will be executed on a dedicated thread in the background.
     /// Make sure that this function will never block indefinitely. Otherwise, the
     /// creation thread will get stuck.
-    pub fn new<F>(siv: &Cursive, creator: F) -> Self
+    pub fn new<F>(siv: &mut Cursive, creator: F) -> Self
     where
-        F: FnOnce(Sender<f32>) -> T + Send + 'static,
+        F: FnMut() -> AsyncProgressState<T> + 'static,
     {
-        let (view_tx, view_rx) = channel::unbounded();
-        let (progress_tx, progress_rx) = channel::unbounded();
-        let (update_tx, update_rx) = channel::unbounded();
-        let sink = siv.cb_sink().clone();
+        let (view_tx, view_rx) = unbounded();
 
-        thread::Builder::new()
-            .name(format!("cursive-async-view::creator"))
-            .spawn(move || {
-                progress_tx.send(0.0).unwrap();
-                view_tx.send(creator(progress_tx)).unwrap();
-
-                // update the layout when the new view is available
-                sink.send(Box::new(|_: &mut Cursive| {})).ok();
-            })
-            .unwrap();
-
-        let update_sink = siv.cb_sink().clone();
-        thread::Builder::new()
-            .name(format!("cursive-async-view::updater"))
-            .spawn(move || {
-                loop {
-                    // it's okay to make this blocking as we are in a dedicated thread
-                    match progress_rx.recv() {
-                        Ok(value) => {
-                            update_tx.send(value).unwrap();
-                            update_sink.send(Box::new(|_: &mut Cursive| {})).ok();
-                        }
-                        Err(_) => break,
-                    }
-                }
-            })
-            .unwrap();
+        Self::polling_cb(siv, Instant::now(), SendWrapper::new(view_tx), creator);
 
         Self {
-            view: None,
+            view: AsyncProgressState::Pending(0.0),
             loading: TextView::new(""),
             progress_fn: Box::new(default_progress),
+            error_fn: Box::new(default_progress_error),
             width: None,
             height: None,
-            view_rx,
-            update_rx,
+            view_rx: view_rx,
+            frame_index: 0,
+            pos: 0,
+        }
+    }
+
+    fn polling_cb<F>(
+        siv: &mut Cursive,
+        instant: Instant,
+        chan: SendWrapper<Sender<AsyncProgressState<T>>>,
+        mut cb: F,
+    ) where
+        F: FnMut() -> AsyncProgressState<T> + 'static,
+    {
+        let res = cb();
+        match res {
+            AsyncProgressState::Pending(_) => {
+                let sink = siv.cb_sink().clone();
+                let cb = SendWrapper::new(cb);
+                // Progress send
+                chan.send(res).unwrap();
+                thread::spawn(move || {
+                    // ensure ~60fps
+                    if let Some(duration) = FPS.checked_sub(instant.elapsed()) {
+                        thread::sleep(duration);
+                    }
+
+                    sink.send(Box::new(move |siv| {
+                        Self::polling_cb(siv, Instant::now(), chan, cb.take())
+                    }))
+                    .unwrap();
+                });
+            }
+            state => {
+                // For now workaround
+                let sink = siv.cb_sink().clone();
+                thread::spawn(move || loop {
+                    thread::sleep(Duration::from_millis(16));
+                    sink.send(Box::new(|_| {})).unwrap();
+                });
+                chan.send(state).unwrap();
+                // chan dropped here, so the rx must handle disconnected
+            }
         }
     }
 
@@ -207,10 +362,20 @@ impl<T: View + Send + Sized> AsyncProgressView<T> {
     /// example on how to create a custom progress function.
     pub fn with_progress_fn<F>(self, progress_fn: F) -> Self
     where
-        F: Fn(usize, usize, f32) -> StyledString + 'static,
+        F: Fn(usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static,
     {
         Self {
             progress_fn: Box::new(progress_fn),
+            ..self
+        }
+    }
+
+    pub fn with_error_fn<F>(self, error_fn: F) -> Self
+    where
+        F: Fn(String, usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static,
+    {
+        Self {
+            error_fn: Box::new(error_fn),
             ..self
         }
     }
@@ -233,9 +398,22 @@ impl<T: View + Send + Sized> AsyncProgressView<T> {
     /// the previous progress bar has already be drawn.
     pub fn set_progress_fn<F>(&mut self, progress_fn: F)
     where
-        F: Fn(usize, usize, f32) -> StyledString + 'static,
+        F: Fn(usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static,
     {
         self.progress_fn = Box::new(progress_fn);
+    }
+
+    /// Set a custom error function for this view, indicating that an error occured during the
+    /// wrapped view creation. See the `default_progress_error` function reference for an
+    /// example on how to create a custom error function.
+    ///
+    /// The function may be set at any time. The progress bar can be changed even if
+    /// the previous progress bar has already be drawn.
+    pub fn set_error_fn<F>(&mut self, error_fn: F)
+    where
+        F: Fn(String, usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static,
+    {
+        self.error_fn = Box::new(error_fn);
     }
 
     /// Make the progress bar inherit its width from the parent view. This is the default.
@@ -251,81 +429,133 @@ impl<T: View + Send + Sized> AsyncProgressView<T> {
 
 impl<T: View + Send + Sized> View for AsyncProgressView<T> {
     fn draw(&self, printer: &Printer) {
-        match self.view {
-            Some(ref view) => view.draw(printer),
-            None => self.loading.draw(printer),
+        match &self.view {
+            AsyncProgressState::Available(v) => {
+                v.draw(printer);
+            }
+            AsyncProgressState::Error(_) | AsyncProgressState::Pending(_) => {
+                self.loading.draw(printer)
+            }
         }
     }
 
     fn layout(&mut self, vec: Vec2) {
-        match self.view {
-            Some(ref mut view) => view.layout(vec),
-            None => self.loading.layout(vec),
+        match &mut self.view {
+            AsyncProgressState::Available(v) => v.layout(vec),
+            AsyncProgressState::Error(_) | AsyncProgressState::Pending(_) => {
+                self.loading.layout(vec)
+            }
         }
     }
 
     fn needs_relayout(&self) -> bool {
-        match self.view {
-            Some(ref view) => view.needs_relayout(),
-            None => true,
+        match &self.view {
+            AsyncProgressState::Available(v) => v.needs_relayout(),
+            AsyncProgressState::Error(_) | AsyncProgressState::Pending(_) => {
+                self.loading.needs_relayout()
+            }
         }
     }
 
     fn required_size(&mut self, constraint: Vec2) -> Vec2 {
-        if self.view.is_none() {
+        if {
+            match self.view {
+                AsyncProgressState::Available(_) => false,
+                _ => true,
+            }
+        } {
             match self.view_rx.try_recv() {
-                Ok(view) => self.view = Some(view),
+                Ok(state) => self.view = state,
                 Err(_) => {}
             }
         }
 
-        match self.view {
-            Some(ref mut view) => view.required_size(constraint),
-            None => {
-                if let Some(value) = self.update_rx.try_recv().ok() {
-                    let width = self.width.unwrap_or(constraint.x);
-                    let height = self.height.unwrap_or(constraint.y);
-                    let content = (self.progress_fn)(width, height, clamp(value, 0.0, 1.0));
-                    self.loading.set_content(content);
-                }
-
+        match &mut self.view {
+            AsyncProgressState::Available(v) => v.required_size(constraint),
+            AsyncProgressState::Pending(value) => {
+                let width = self.width.unwrap_or(constraint.x);
+                let height = self.height.unwrap_or(constraint.y);
+                let AnimationProgressFrame {
+                    content,
+                    pos,
+                    next_frame_idx,
+                } = (self.progress_fn)(
+                    width,
+                    height,
+                    clamp(*value, 0.0, 1.0),
+                    self.pos,
+                    self.frame_index,
+                );
+                self.pos = pos;
+                self.frame_index = next_frame_idx;
+                self.loading.set_content(content);
+                self.loading.required_size(constraint)
+            }
+            AsyncProgressState::Error(msg) => {
+                let width = self.width.unwrap_or(constraint.x);
+                let height = self.height.unwrap_or(constraint.y);
+                let AnimationProgressFrame {
+                    content,
+                    pos,
+                    next_frame_idx,
+                } = (self.error_fn)(
+                    msg.to_string(),
+                    width,
+                    height,
+                    0.5,
+                    self.pos,
+                    self.frame_index,
+                );
+                self.pos = pos;
+                self.frame_index = next_frame_idx;
+                self.loading.set_content(content);
                 self.loading.required_size(constraint)
             }
         }
     }
 
     fn on_event(&mut self, ev: Event) -> EventResult {
-        match self.view {
-            Some(ref mut view) => view.on_event(ev),
-            None => self.loading.on_event(ev),
+        match &mut self.view {
+            AsyncProgressState::Available(v) => v.on_event(ev),
+            AsyncProgressState::Error(_) | AsyncProgressState::Pending(_) => {
+                self.loading.on_event(ev)
+            }
         }
     }
 
     fn call_on_any<'a>(&mut self, sel: &Selector, cb: AnyCb<'a>) {
-        match self.view {
-            Some(ref mut view) => view.call_on_any(sel, cb),
-            None => self.loading.call_on_any(sel, cb),
+        match &mut self.view {
+            AsyncProgressState::Available(v) => v.call_on_any(sel, cb),
+            AsyncProgressState::Error(_) | AsyncProgressState::Pending(_) => {
+                self.loading.call_on_any(sel, cb)
+            }
         }
     }
 
     fn focus_view(&mut self, sel: &Selector) -> Result<(), ()> {
-        match self.view {
-            Some(ref mut view) => view.focus_view(sel),
-            None => self.loading.focus_view(sel),
+        match &mut self.view {
+            AsyncProgressState::Available(v) => v.focus_view(sel),
+            AsyncProgressState::Error(_) | AsyncProgressState::Pending(_) => {
+                self.loading.focus_view(sel)
+            }
         }
     }
 
     fn take_focus(&mut self, source: Direction) -> bool {
-        match self.view {
-            Some(ref mut view) => view.take_focus(source),
-            None => self.loading.take_focus(source),
+        match &mut self.view {
+            AsyncProgressState::Available(v) => v.take_focus(source),
+            AsyncProgressState::Error(_) | AsyncProgressState::Pending(_) => {
+                self.loading.take_focus(source)
+            }
         }
     }
 
     fn important_area(&self, view_size: Vec2) -> Rect {
-        match self.view {
-            Some(ref view) => view.important_area(view_size),
-            None => self.loading.important_area(view_size),
+        match &self.view {
+            AsyncProgressState::Available(v) => v.important_area(view_size),
+            AsyncProgressState::Error(_) | AsyncProgressState::Pending(_) => {
+                self.loading.important_area(view_size)
+            }
         }
     }
 }
