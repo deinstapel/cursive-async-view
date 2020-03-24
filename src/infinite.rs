@@ -11,6 +11,7 @@ use cursive::view::{Selector, View};
 use cursive::views::TextView;
 use cursive::{Cursive, Printer, Rect, Vec2};
 use interpolation::Ease;
+use log::warn;
 use num::clamp;
 use send_wrapper::SendWrapper;
 
@@ -197,7 +198,7 @@ pub fn default_error(
     let mut result = StyledString::default();
     if end >= begin && idx > cycle {
         if msg.as_str().get(0..begin).is_none() {
-            begin = begin + 2;
+            begin += 2;
         }
         msg.truncate(begin);
         result.append_plain(msg);
@@ -209,7 +210,7 @@ pub fn default_error(
         result.append_styled(utils::repeat_str(symbol, width - end), background);
     } else if idx > cycle + duration / 2 {
         if msg.as_str().get(0..begin).is_none() {
-            begin = begin + 2
+            begin += 2
         }
         msg.truncate(begin);
         result.append_plain(msg);
@@ -378,11 +379,7 @@ impl<T: View> AsyncView<T> {
     /// The `bg_task` function is executed on a background thread called
     /// `cursive-async-view::bg_task`. It should be used to produce data of
     /// type `D` which is converted to a view by the `view_creator` function.
-    pub fn new_with_bg_creator<F, C, D>(
-        siv: &mut Cursive,
-        bg_task: F,
-        mut view_creator: C,
-    ) -> Self
+    pub fn new_with_bg_creator<F, C, D>(siv: &mut Cursive, bg_task: F, mut view_creator: C) -> Self
     where
         D: Send + 'static,
         F: FnOnce() -> Result<D, String> + Send + 'static,
@@ -397,14 +394,12 @@ impl<T: View> AsyncView<T> {
             })
             .unwrap();
 
-        Self::new(siv, move || {
-            match rx.try_recv() {
-                Ok(Ok(data)) => AsyncState::Available(view_creator(data)),
-                Ok(Err(err)) => AsyncState::Error(err),
-                Err(TryRecvError::Empty) => AsyncState::Pending,
-                Err(TryRecvError::Disconnected) => AsyncState::Error(
-                    "Internal error: bg_task disconnected unexpectedly!".to_string()
-                ),
+        Self::new(siv, move || match rx.try_recv() {
+            Ok(Ok(data)) => AsyncState::Available(view_creator(data)),
+            Ok(Err(err)) => AsyncState::Error(err),
+            Err(TryRecvError::Empty) => AsyncState::Pending,
+            Err(TryRecvError::Disconnected) => {
+                AsyncState::Error("Internal error: bg_task disconnected unexpectedly!".to_string())
             }
         })
     }
@@ -427,10 +422,14 @@ impl<T: View> AsyncView<T> {
                         thread::sleep(duration);
                     }
 
-                    sink.send(Box::new(move |siv| {
+                    match sink.send(Box::new(move |siv| {
                         Self::polling_cb(siv, Instant::now(), chan, cb.take())
-                    }))
-                    .unwrap();
+                    })) {
+                        Ok(_) => {}
+                        Err(send_err) => {
+                            warn!("Could not send callback to cursive. It probably has been dropped before the asynchronous initialization of a view has been finished: {}", send_err);
+                        }
+                    }
                 });
             }
             state => {
@@ -438,9 +437,24 @@ impl<T: View> AsyncView<T> {
                 let sink = siv.cb_sink().clone();
                 thread::spawn(move || loop {
                     thread::sleep(Duration::from_millis(16));
-                    sink.send(Box::new(|_| {})).unwrap();
+                    match sink.send(Box::new(|_| {})) {
+                        Ok(_) => {}
+                        Err(send_err) => {
+                            warn!("Could not send callback to cursive. It probably has been dropped before the asynchronous initialization of a view has been finished: {}", send_err);
+                        }
+                    }
                 });
-                chan.send(state).unwrap();
+                // This may panic if the other site has been dropped Can happen
+                // if the view gets removed before the event loop has finished
+                // causing the sender to try to to communicate with a dead
+                // receiver To fix this we drop this error and warn the user
+                // that this behaviour is discouraged
+                match chan.send(state) {
+                    Ok(_) => {}
+                    Err(send_err) => {
+                        warn!("View has been dropped before asynchronous initialization has been finished. Check if you removed this view from Cursive: {}", send_err);
+                    }
+                }
                 // chan dropped here, so the rx must handle disconnected
             }
         }
@@ -626,9 +640,8 @@ impl<T: View + Sized> View for AsyncView<T> {
     }
 
     fn call_on_any<'a>(&mut self, sel: &Selector, cb: AnyCb<'a>) {
-        match self.view {
-            AsyncState::Available(ref mut view) => view.call_on_any(sel, cb),
-            _ => {}
+        if let AsyncState::Available(ref mut view) = self.view {
+            view.call_on_any(sel, cb)
         }
     }
 

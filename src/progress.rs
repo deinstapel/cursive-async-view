@@ -25,7 +25,6 @@ pub enum AsyncProgressState<V: View> {
     Available(V),
 }
 
-
 /// This struct contains the content of a single frame for `AsyncProgressView` with some metadata about the current frame.
 pub struct AnimationProgressFrame {
     /// Stylized String which gets printed until the view is ready, or if the creation has failed.
@@ -192,7 +191,7 @@ pub fn default_progress_error(
         .get(0..offset as usize)
         .is_none()
     {
-        offset = offset + 2 as f64;
+        offset += 2_f64;
     }
     let end = pos + offset as usize;
     background_content.truncate(offset as usize);
@@ -215,7 +214,7 @@ pub fn default_progress_error(
 
     AnimationProgressFrame {
         content: result,
-        pos: pos,
+        pos,
         next_frame_idx: frame_idx + 1,
     }
 }
@@ -293,7 +292,7 @@ impl<T: View> AsyncProgressView<T> {
             error_fn: Box::new(default_progress_error),
             width: None,
             height: None,
-            view_rx: view_rx,
+            view_rx,
             frame_index: 0,
             pos: 0,
         }
@@ -458,15 +457,12 @@ impl<T: View + Send + Sized> View for AsyncProgressView<T> {
     }
 
     fn required_size(&mut self, constraint: Vec2) -> Vec2 {
-        if {
-            match self.view {
-                AsyncProgressState::Available(_) => false,
-                _ => true,
-            }
+        if match self.view {
+            AsyncProgressState::Available(_) => false,
+            _ => true,
         } {
-            match self.view_rx.try_recv() {
-                Ok(state) => self.view = state,
-                Err(_) => {}
+            if let Ok(state) = self.view_rx.try_recv() {
+                self.view = state
             }
         }
 
@@ -499,7 +495,7 @@ impl<T: View + Send + Sized> View for AsyncProgressView<T> {
                     pos,
                     next_frame_idx,
                 } = (self.error_fn)(
-                    msg.to_string(),
+                    (*msg).to_string(),
                     width,
                     height,
                     0.5,
