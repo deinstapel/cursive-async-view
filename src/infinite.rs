@@ -331,6 +331,7 @@ pub struct AsyncView<T: View> {
     pos: usize,
     error_idx: usize,
     rx: Receiver<AsyncState<T>>,
+    error_sender: Sender<()>,
 }
 
 lazy_static::lazy_static! {
@@ -354,9 +355,10 @@ impl<T: View> AsyncView<T> {
         // create communication channel between cursive event loop and
         // this views layout code
         let (tx, rx) = channel::unbounded();
+        let (error_tx, error_rx) = channel::bounded(1);
 
         let instant = Instant::now();
-        Self::polling_cb(siv, instant, SendWrapper::new(tx), ready_poll);
+        Self::polling_cb(siv, instant, SendWrapper::new(tx), error_rx, ready_poll);
 
         Self {
             view: AsyncState::Pending,
@@ -368,6 +370,7 @@ impl<T: View> AsyncView<T> {
             pos: 0,
             error_idx: 0,
             rx,
+            error_sender: error_tx,
         }
     }
 
@@ -408,6 +411,7 @@ impl<T: View> AsyncView<T> {
         siv: &mut Cursive,
         instant: Instant,
         chan: SendWrapper<Sender<AsyncState<T>>>,
+        end_anim: Receiver<()>,
         mut cb: F,
     ) where
         F: FnMut() -> AsyncState<T> + 'static,
@@ -423,7 +427,7 @@ impl<T: View> AsyncView<T> {
                     }
 
                     match sink.send(Box::new(move |siv| {
-                        Self::polling_cb(siv, Instant::now(), chan, cb.take())
+                        Self::polling_cb(siv, Instant::now(), chan, end_anim, cb.take())
                     })) {
                         Ok(_) => {}
                         Err(send_err) => {
@@ -432,24 +436,16 @@ impl<T: View> AsyncView<T> {
                     }
                 });
             }
-            state => {
-                // For now workaround
-                let sink = siv.cb_sink().clone();
-                thread::spawn(move || loop {
-                    thread::sleep(Duration::from_millis(16));
-                    match sink.send(Box::new(|_| {})) {
-                        Ok(_) => {}
-                        Err(send_err) => {
-                            warn!("Could not send callback to cursive. It probably has been dropped before the asynchronous initialization of a view has been finished: {}", send_err);
-                        }
-                    }
-                });
+            AsyncState::Error(content) => {
+                // Start a thread running until the object has been dropped
+                Self::error_anim_cb(siv, end_anim);
+
                 // This may panic if the other site has been dropped Can happen
                 // if the view gets removed before the event loop has finished
                 // causing the sender to try to to communicate with a dead
                 // receiver To fix this we drop this error and warn the user
                 // that this behaviour is discouraged
-                match chan.send(state) {
+                match chan.send(AsyncState::Error(content)) {
                     Ok(_) => {}
                     Err(send_err) => {
                         warn!("View has been dropped before asynchronous initialization has been finished. Check if you removed this view from Cursive: {}", send_err);
@@ -457,31 +453,53 @@ impl<T: View> AsyncView<T> {
                 }
                 // chan dropped here, so the rx must handle disconnected
             }
+            AsyncState::Available(view) => match chan.send(AsyncState::Available(view)) {
+                Ok(_) => {}
+                Err(send_err) => {
+                    warn!("View has been dropped before asynchronous initialization has been finished. Check if you removed this view from Cursive: {}", send_err);
+                }
+            },
         }
+    }
+
+    fn error_anim_cb(siv: &mut Cursive, chan: Receiver<()>) {
+        let sink = siv.cb_sink().clone();
+        thread::spawn(move || loop {
+            thread::sleep(Duration::from_millis(16));
+
+            match chan.try_recv() {
+                Ok(()) => break,
+                Err(_) => match sink.send(Box::new(|_| {})) {
+                    Ok(_) => {}
+                    Err(send_err) => {
+                        warn!(
+                            "Cursive has been dropped before AsyncView has been: {}",
+                            send_err
+                        );
+                    }
+                },
+            }
+        });
     }
 
     /// Mark the maximum allowed width in characters, the loading animation may consume.
     /// By default, the width will be inherited by the parent view.
-    pub fn with_width(self, width: usize) -> Self {
-        Self {
-            width: Some(width),
-            ..self
-        }
+    pub fn with_width(mut self, width: usize) -> Self {
+        self.set_width(width);
+        self
     }
 
     /// Mark the maximum allowed height in characters, the loading animation may consume.
     /// By default, the height will be inherited by the parent view.
-    pub fn with_height(self, height: usize) -> Self {
-        Self {
-            height: Some(height),
-            ..self
-        }
+    pub fn with_height(mut self, height: usize) -> Self {
+        self.set_height(height);
+        self
     }
 
     /// Set a custom animation function for this view, indicating that the wrapped view is
     /// not available yet. See the `default_animation` function reference for an example on
     /// how to create a custom animation function.
-    pub fn with_animation_fn<F>(self, animation_fn: F) -> Self
+    pub fn with_animation_fn<F>(mut self, animation_fn: F) -> Self
     where
         // We cannot use a lifetime bound to the AsyncView struct because View has a
         //  'static requirement. Therefore we have to make sure the animation_fn is
@@ -490,17 +508,15 @@ impl<T: View> AsyncView<T> {
         // `move |width| {...}` or fn's.
         F: Fn(usize, usize, usize) -> AnimationFrame + 'static,
     {
-        Self {
-            animation_fn: Box::new(animation_fn),
-            ..self
-        }
+        self.set_animation_fn(animation_fn);
+        self
     }
 
     /// Set a custom error animation function for this view, indicating that the
     /// wrapped view has failed to load. See the `default_error` function
     /// reference for an example on how to create a custom error animation
     /// function.
-    pub fn with_error_fn<F>(self, error_fn: F) -> Self
+    pub fn with_error_fn<F>(mut self, error_fn: F) -> Self
     where
         // We cannot use a lifetime bound to the AsyncView struct because View has a
         //  'static requirement. Therefore we have to make sure the error_fn is
@@ -509,10 +525,8 @@ impl<T: View> AsyncView<T> {
         // `move |width| {...}` or fn's.
         F: Fn(&str, usize, usize, usize, usize) -> AnimationFrame + 'static,
     {
-        Self {
-            error_fn: Box::new(error_fn),
-            ..self
-        }
+        self.set_error_fn(error_fn);
+        self
     }
 
     /// Set the maximum allowed width in characters, the loading animation may consume.
@@ -559,6 +573,18 @@ impl<T: View> AsyncView<T> {
     /// Make the loading animation inherit its height from the parent view. This is the default.
     pub fn inherit_height(&mut self) {
         self.height = None;
+    }
+}
+
+impl<T: View> Drop for AsyncView<T> {
+    fn drop(&mut self) {
+        match self.error_sender.send(()) {
+            Ok(_) => {}
+            Err(send_err) => warn!(
+                "Refreshing thread has been dropped before view has, this has no impact on your code and is a bug: {}",
+                send_err
+            ),
+        }
     }
 }
 
