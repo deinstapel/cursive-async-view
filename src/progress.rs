@@ -1,4 +1,4 @@
-use crossbeam::channel::{unbounded, Receiver, Sender};
+use crossbeam::channel::{bounded, unbounded, Receiver, Sender};
 use cursive::direction::Direction;
 use cursive::event::{AnyCb, Event, EventResult};
 use cursive::theme::PaletteColor;
@@ -7,13 +7,14 @@ use cursive::view::{Selector, View};
 use cursive::views::TextView;
 use cursive::{Cursive, Printer, Rect, Vec2};
 use interpolation::Ease;
+use log::warn;
 use num::clamp;
 use send_wrapper::SendWrapper;
 
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-use crate::{infinite::FPS, utils};
+use crate::{infinite::FPS, utils, AsyncView};
 
 /// An enum to be returned by the `poll_ready` callback, with additional information about the creation progress.
 pub enum AsyncProgressState<V: View> {
@@ -266,6 +267,7 @@ pub struct AsyncProgressView<T: View> {
     height: Option<usize>,
     view_rx: Receiver<AsyncProgressState<T>>,
     frame_index: usize,
+    dropped: Sender<()>,
     pos: usize,
 }
 
@@ -282,8 +284,15 @@ impl<T: View> AsyncProgressView<T> {
         F: FnMut() -> AsyncProgressState<T> + 'static,
     {
         let (view_tx, view_rx) = unbounded();
+        let (error_tx, error_rx) = bounded(1);
 
-        Self::polling_cb(siv, Instant::now(), SendWrapper::new(view_tx), creator);
+        Self::polling_cb(
+            siv,
+            Instant::now(),
+            SendWrapper::new(view_tx),
+            error_rx,
+            creator,
+        );
 
         Self {
             view: AsyncProgressState::Pending(0.0),
@@ -294,6 +303,7 @@ impl<T: View> AsyncProgressView<T> {
             height: None,
             view_rx,
             frame_index: 0,
+            dropped: error_tx,
             pos: 0,
         }
     }
@@ -302,6 +312,7 @@ impl<T: View> AsyncProgressView<T> {
         siv: &mut Cursive,
         instant: Instant,
         chan: SendWrapper<Sender<AsyncProgressState<T>>>,
+        error_chan: Receiver<()>,
         mut cb: F,
     ) where
         F: FnMut() -> AsyncProgressState<T> + 'static,
@@ -311,72 +322,79 @@ impl<T: View> AsyncProgressView<T> {
             AsyncProgressState::Pending(_) => {
                 let sink = siv.cb_sink().clone();
                 let cb = SendWrapper::new(cb);
-                // Progress send
-                chan.send(res).unwrap();
+                match chan.send(res) {
+                    Ok(_) => {},
+                    Err(send_err) => warn!("Could not send progress to AsyncProgressView. It probably has been dropped before the asynchronous initialization of a view has been finished: {}", send_err),
+                }
                 thread::spawn(move || {
                     // ensure ~60fps
                     if let Some(duration) = FPS.checked_sub(instant.elapsed()) {
                         thread::sleep(duration);
                     }
 
-                    sink.send(Box::new(move |siv| {
-                        Self::polling_cb(siv, Instant::now(), chan, cb.take())
-                    }))
-                    .unwrap();
+                    match sink.send(Box::new(move |siv| {
+                        Self::polling_cb(siv, Instant::now(), chan, error_chan, cb.take())
+                    })) {
+                        Ok(_) => {}
+                        Err(send_err) => {
+                            warn!("Could not send callback to cursive. It probably has been dropped before the asynchronous initialization of a view has been finished: {}", send_err);
+                        }
+                    }
                 });
             }
-            state => {
-                // For now workaround
-                let sink = siv.cb_sink().clone();
-                thread::spawn(move || loop {
-                    thread::sleep(Duration::from_millis(16));
-                    sink.send(Box::new(|_| {})).unwrap();
-                });
-                chan.send(state).unwrap();
+            AsyncProgressState::Error(content) => {
+                AsyncView::<T>::error_anim_cb(siv, error_chan);
+
+                match chan.send(AsyncProgressState::Error(content)) {
+                    Ok(_) => {}
+                    Err(send_err) => {
+                        warn!("View has been dropped before asynchronous initialization has been finished. Check if you removed this view from Cursive: {}", send_err);
+                    }
+                }
                 // chan dropped here, so the rx must handle disconnected
+            }
+            AsyncProgressState::Available(view) => {
+                match chan.send(AsyncProgressState::Available(view)) {
+                    Ok(_) => {}
+                    Err(send_err) => {
+                        warn!("View has been dropped before asynchronous initialization has been finished. Check if you removed this view from Cursive: {}", send_err);
+                    }
+                }
             }
         }
     }
 
     /// Mark the maximum allowed width in characters, the progress bar may consume.
     /// By default, the width will be inherited by the parent view.
-    pub fn with_width(self, width: usize) -> Self {
-        Self {
-            width: Some(width),
-            ..self
-        }
+    pub fn with_width(mut self, width: usize) -> Self {
+        self.set_width(width);
+        self
     }
 
     /// Mark the maximum allowed height in characters, the progress bar may consume.
     /// By default, the height will be inherited by the parent view.
-    pub fn with_height(self, height: usize) -> Self {
-        Self {
-            height: Some(height),
-            ..self
-        }
+    pub fn with_height(mut self, height: usize) -> Self {
+        self.set_height(height);
+        self
     }
 
     /// Set a custom progress function for this view, indicating the progress of the
     /// wrapped view creation. See the `default_progress` function reference for an
     /// example on how to create a custom progress function.
-    pub fn with_progress_fn<F>(self, progress_fn: F) -> Self
+    pub fn with_progress_fn<F>(mut self, progress_fn: F) -> Self
     where
         F: Fn(usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static,
     {
-        Self {
-            progress_fn: Box::new(progress_fn),
-            ..self
-        }
+        self.set_progress_fn(progress_fn);
+        self
     }
 
-    pub fn with_error_fn<F>(self, error_fn: F) -> Self
+    pub fn with_error_fn<F>(mut self, error_fn: F) -> Self
     where
         F: Fn(String, usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static,
     {
-        Self {
-            error_fn: Box::new(error_fn),
-            ..self
-        }
+        self.set_error_fn(error_fn);
+        self
     }
 
     /// Set the maximum allowed width in characters, the progress bar may consume.
@@ -423,6 +441,18 @@ impl<T: View> AsyncProgressView<T> {
     /// Make the progress bar inherit its height from the parent view. This is the default.
     pub fn inherit_height(&mut self) {
         self.height = None;
+    }
+}
+
+impl<T: View> Drop for AsyncProgressView<T> {
+    fn drop(&mut self) {
+        match self.dropped.send(()) {
+            Ok(_) => {}
+            Err(send_err) => warn!(
+                "Refreshing thread has been dropped before view has, this has no impact on your code and is a bug: {}",
+                send_err
+            ),
+        }
     }
 }
 

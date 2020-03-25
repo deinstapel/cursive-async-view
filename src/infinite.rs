@@ -462,7 +462,7 @@ impl<T: View> AsyncView<T> {
         }
     }
 
-    fn error_anim_cb(siv: &mut Cursive, chan: Receiver<()>) {
+    pub(crate) fn error_anim_cb(siv: &mut Cursive, chan: Receiver<()>) {
         let sink = siv.cb_sink().clone();
         thread::spawn(move || loop {
             thread::sleep(Duration::from_millis(16));

@@ -116,7 +116,7 @@ If you have information about the progress a long taking view creation has made,
 you can wrap the creation in an `AsyncProgressView`. This will display a progress
 bar until the inner view is ready to be drawn.
 
-```
+```rust
 use cursive::{views::TextView, Cursive};
 use cursive_async_view::{AsyncProgressView, AsyncProgressState};
 
