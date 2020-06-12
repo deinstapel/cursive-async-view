@@ -456,7 +456,7 @@ impl<T: View> Drop for AsyncProgressView<T> {
     }
 }
 
-impl<T: View + Send + Sized> View for AsyncProgressView<T> {
+impl<T: View + Sized> View for AsyncProgressView<T> {
     fn draw(&self, printer: &Printer) {
         match &self.view {
             AsyncProgressState::Available(v) => {
