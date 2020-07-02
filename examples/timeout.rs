@@ -1,6 +1,6 @@
 use cursive::{
     views::{Dialog, TextView},
-    Cursive,
+    Cursive, CursiveExt,
 };
 use cursive_async_view::{AsyncState, AsyncView};
 use std::sync::mpsc::{channel, TryRecvError};

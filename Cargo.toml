@@ -13,7 +13,7 @@ documentation = "https://docs.rs/cursive-async-view"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cursive = { version = "0.14.0", default-features = false }
+cursive_core = "0.1"
 log = "0.4.8"
 interpolation = "0.2.0"
 crossbeam = "0.7.3"
@@ -23,7 +23,7 @@ lazy_static = "1.4.0"
 doc-comment = "0.3.3"
 
 [dev-dependencies]
-cursive = "0.14.0"
+cursive = "0.15.0"
 
 [badges]
 travis-ci = { repository = "deinstapel/cursive-async-view" }

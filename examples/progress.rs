@@ -1,8 +1,8 @@
 extern crate cursive_async_view;
 
-use std::time::{Instant, Duration};
-use cursive::{self, views::Dialog, views::TextView, Cursive};
+use cursive::{self, views::Dialog, views::TextView, Cursive, CursiveExt};
 use cursive_async_view::{AsyncProgressState, AsyncProgressView};
+use std::time::{Duration, Instant};
 
 fn main() {
     cursive::logger::init();

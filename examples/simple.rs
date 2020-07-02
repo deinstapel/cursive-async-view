@@ -1,9 +1,7 @@
-extern crate cursive_async_view;
-
 use std::time::{Instant, Duration};
 
 use cursive::views::{Dialog, TextView};
-use cursive::Cursive;
+use cursive::{Cursive, CursiveExt};
 use cursive_async_view::{AsyncState, AsyncView};
 
 fn main() {

@@ -1,11 +1,11 @@
 use crossbeam::channel::{bounded, unbounded, Receiver, Sender};
-use cursive::direction::Direction;
-use cursive::event::{AnyCb, Event, EventResult};
-use cursive::theme::PaletteColor;
-use cursive::utils::markup::StyledString;
-use cursive::view::{Selector, View};
-use cursive::views::TextView;
-use cursive::{Cursive, Printer, Rect, Vec2};
+use cursive_core::direction::Direction;
+use cursive_core::event::{AnyCb, Event, EventResult};
+use cursive_core::theme::PaletteColor;
+use cursive_core::utils::markup::StyledString;
+use cursive_core::view::{Selector, View};
+use cursive_core::views::TextView;
+use cursive_core::{Cursive, Printer, Rect, Vec2};
 use interpolation::Ease;
 use log::warn;
 use num::clamp;

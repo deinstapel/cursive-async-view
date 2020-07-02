@@ -6,7 +6,7 @@ use std::thread;
 use std::time::Duration;
 
 use cursive::views::{Dialog, LinearLayout, RadioGroup};
-use cursive::Cursive;
+use cursive::{Cursive, CursiveExt};
 use cursive_async_view::{AsyncState, AsyncView};
 
 fn main() {
