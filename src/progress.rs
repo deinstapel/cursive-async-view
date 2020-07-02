@@ -44,7 +44,7 @@ pub struct AnimationProgressFrame {
 ///
 /// ```
 /// use crossbeam::Sender;
-/// use cursive::Cursive;
+/// use cursive::{Cursive, CursiveExt};
 /// use cursive::views::TextView;
 /// use cursive::utils::markup::StyledString;
 /// use cursive_async_view::{AnimationProgressFrame, AsyncProgressView, AsyncProgressState};
@@ -124,7 +124,7 @@ pub fn default_progress(
 ///
 /// ```
 /// use crossbeam::Sender;
-/// use cursive::Cursive;
+/// use cursive::{Cursive, CursiveExt};
 /// use cursive::views::TextView;
 /// use cursive::utils::markup::StyledString;
 /// use cursive_async_view::{AnimationProgressFrame, AsyncProgressView, AsyncProgressState};
@@ -240,7 +240,7 @@ pub fn default_progress_error(
 /// # Example usage
 ///
 /// ```
-/// use cursive::{views::TextView, Cursive};
+/// use cursive::{views::TextView, Cursive, CursiveExt};
 /// use cursive_async_view::{AsyncProgressView, AsyncProgressState};
 ///
 /// let mut siv = Cursive::default();

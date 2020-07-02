@@ -58,7 +58,7 @@ display a loading animation until the inner view is ready to be drawn.
 
 ```rust
 use std::time::{Instant, Duration};
-use cursive::{views::TextView, Cursive};
+use cursive::{views::TextView, Cursive, CursiveExt};
 use cursive_async_view::{AsyncView, AsyncState};
 
 let mut siv = Cursive::default();
@@ -89,7 +89,7 @@ use std::thread;
 use std::time::Duration;
 
 use cursive::views::TextView;
-use cursive::Cursive;
+use cursive::{Cursive, CursiveExt};
 use cursive_async_view::AsyncView;
 
 let mut siv = Cursive::default();
@@ -117,7 +117,7 @@ you can wrap the creation in an `AsyncProgressView`. This will display a progres
 bar until the inner view is ready to be drawn.
 
 ```rust
-use cursive::{views::TextView, Cursive};
+use cursive::{views::TextView, Cursive, CursiveExt};
 use cursive_async_view::{AsyncProgressView, AsyncProgressState};
 
 let mut siv = Cursive::default();

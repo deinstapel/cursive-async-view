@@ -12,7 +12,7 @@
 //!
 //! ```
 //! use std::time::{Instant, Duration};
-//! use cursive::{views::TextView, Cursive};
+//! use cursive::{views::TextView, Cursive, CursiveExt};
 //! use cursive_async_view::{AsyncView, AsyncState};
 //!
 //! let mut siv = Cursive::default();
@@ -43,7 +43,7 @@
 //! use std::time::Duration;
 //!
 //! use cursive::views::TextView;
-//! use cursive::Cursive;
+//! use cursive::{Cursive, CursiveExt};
 //! use cursive_async_view::AsyncView;
 //!
 //! let mut siv = Cursive::default();
@@ -71,7 +71,7 @@
 //! bar until the inner view is ready to be drawn.
 //!
 //! ```
-//! use cursive::{views::TextView, Cursive};
+//! use cursive::{views::TextView, Cursive, CursiveExt};
 //! use cursive_async_view::{AsyncProgressView, AsyncProgressState};
 //!
 //! let mut siv = Cursive::default();
@@ -94,7 +94,8 @@ mod utils;
 
 pub use infinite::{default_animation, default_error, AnimationFrame, AsyncState, AsyncView};
 pub use progress::{
-    default_progress, default_progress_error, AsyncProgressState, AsyncProgressView, AnimationProgressFrame
+    default_progress, default_progress_error, AnimationProgressFrame, AsyncProgressState,
+    AsyncProgressView,
 };
 
 doc_comment::doctest!("../README.md");

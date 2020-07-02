@@ -38,7 +38,7 @@ pub struct AnimationFrame {
 ///
 /// ```
 /// use std::time::{Instant, Duration};
-/// use cursive::Cursive;
+/// use cursive::{Cursive, CursiveExt};
 /// use cursive::views::TextView;
 /// use cursive::utils::markup::StyledString;
 /// use cursive_async_view::{AsyncView, AsyncState, AnimationFrame};
@@ -122,7 +122,7 @@ pub fn default_animation(width: usize, _height: usize, frame_idx: usize) -> Anim
 ///
 /// ```
 /// use std::time::{Instant, Duration};
-/// use cursive::Cursive;
+/// use cursive::{Cursive, CursiveExt};
 /// use cursive::views::TextView;
 /// use cursive::utils::markup::StyledString;
 /// use cursive_async_view::{AsyncView, AsyncState, AnimationFrame};
@@ -263,7 +263,7 @@ pub enum AsyncState<V: View> {
 ///
 /// ```
 /// use std::time::{Instant, Duration};
-/// use cursive::{views::TextView, Cursive};
+/// use cursive::{views::TextView, Cursive, CursiveExt};
 /// use cursive_async_view::{AsyncView, AsyncState};
 ///
 /// let mut siv = Cursive::default();
@@ -303,7 +303,7 @@ pub enum AsyncState<V: View> {
 /// use std::time::Duration;
 ///
 /// use cursive::views::TextView;
-/// use cursive::Cursive;
+/// use cursive::{Cursive, CursiveExt};
 /// use cursive_async_view::AsyncView;
 ///
 /// let mut siv = Cursive::default();
