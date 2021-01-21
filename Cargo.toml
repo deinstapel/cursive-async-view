@@ -14,16 +14,16 @@ documentation = "https://docs.rs/cursive-async-view"
 
 [dependencies]
 cursive_core = "0.2"
-log = "0.4.8"
+log = "0.4"
 interpolation = "0.2.0"
 crossbeam = "0.8"
-num = "0.2.1"
-send_wrapper = "0.4.0"
-lazy_static = "1.4.0"
-doc-comment = "0.3.3"
+num = "0.3"
+send_wrapper = "0.5"
+lazy_static = "1.4"
+doc-comment = "0.3"
 
 [dev-dependencies]
-cursive = "0.16.0"
+cursive = "0.16"
 
 [badges]
 travis-ci = { repository = "deinstapel/cursive-async-view" }
