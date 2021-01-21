@@ -3,7 +3,7 @@ use cursive_core::direction::Direction;
 use cursive_core::event::{AnyCb, Event, EventResult};
 use cursive_core::theme::PaletteColor;
 use cursive_core::utils::markup::StyledString;
-use cursive_core::view::{Selector, View};
+use cursive_core::view::{Selector, View, ViewNotFound};
 use cursive_core::views::TextView;
 use cursive_core::{Cursive, Printer, Rect, Vec2};
 use interpolation::Ease;
@@ -43,7 +43,7 @@ pub struct AnimationProgressFrame {
 /// As an example a very basic progress function would look like this:
 ///
 /// ```
-/// use crossbeam::Sender;
+/// use crossbeam::channel::Sender;
 /// use cursive::{Cursive, CursiveExt};
 /// use cursive::views::TextView;
 /// use cursive::utils::markup::StyledString;
@@ -123,7 +123,7 @@ pub fn default_progress(
 /// The creation is very similar to the progress animation, but the error message is given now as the first parameter.
 ///
 /// ```
-/// use crossbeam::Sender;
+/// use crossbeam::channel::Sender;
 /// use cursive::{Cursive, CursiveExt};
 /// use cursive::views::TextView;
 /// use cursive::utils::markup::StyledString;
@@ -487,10 +487,7 @@ impl<T: View + Sized> View for AsyncProgressView<T> {
     }
 
     fn required_size(&mut self, constraint: Vec2) -> Vec2 {
-        if match self.view {
-            AsyncProgressState::Available(_) => false,
-            _ => true,
-        } {
+        if !matches!(self.view, AsyncProgressState::Available(_)) {
             if let Ok(state) = self.view_rx.try_recv() {
                 self.view = state
             }
@@ -558,7 +555,7 @@ impl<T: View + Sized> View for AsyncProgressView<T> {
         }
     }
 
-    fn focus_view(&mut self, sel: &Selector) -> Result<(), ()> {
+    fn focus_view(&mut self, sel: &Selector) -> Result<(), ViewNotFound> {
         match &mut self.view {
             AsyncProgressState::Available(v) => v.focus_view(sel),
             AsyncProgressState::Error(_) | AsyncProgressState::Pending(_) => {
