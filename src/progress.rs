@@ -43,7 +43,7 @@ pub struct AnimationProgressFrame {
 /// As an example a very basic progress function would look like this:
 ///
 /// ```
-/// use crossbeam::Sender;
+/// use crossbeam::channel::Sender;
 /// use cursive::{Cursive, CursiveExt};
 /// use cursive::views::TextView;
 /// use cursive::utils::markup::StyledString;
@@ -123,7 +123,7 @@ pub fn default_progress(
 /// The creation is very similar to the progress animation, but the error message is given now as the first parameter.
 ///
 /// ```
-/// use crossbeam::Sender;
+/// use crossbeam::channel::Sender;
 /// use cursive::{Cursive, CursiveExt};
 /// use cursive::views::TextView;
 /// use cursive::utils::markup::StyledString;
