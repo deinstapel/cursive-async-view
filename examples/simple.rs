@@ -1,4 +1,4 @@
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 use cursive::views::{Dialog, TextView};
 use cursive::{Cursive, CursiveExt};
@@ -19,9 +19,7 @@ fn main() {
         // Instead look if the calculation is ready.
         if start_time.elapsed() > Duration::from_secs(5) {
             // we are ready to display the content
-            AsyncState::Available(
-                TextView::new("Krawoombah! Async loading is working 🦀")
-            )
+            AsyncState::Available(TextView::new("Krawoombah! Async loading is working 🦀"))
         } else {
             // still waiting for five seconds to pass
             AsyncState::Pending

@@ -487,10 +487,7 @@ impl<T: View + Sized> View for AsyncProgressView<T> {
     }
 
     fn required_size(&mut self, constraint: Vec2) -> Vec2 {
-        if match self.view {
-            AsyncProgressState::Available(_) => false,
-            _ => true,
-        } {
+        if !matches!(self.view, AsyncProgressState::Available(_)) {
             if let Ok(state) = self.view_rx.try_recv() {
                 self.view = state
             }
