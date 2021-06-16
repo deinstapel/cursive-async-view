@@ -24,6 +24,3 @@ doc-comment = "0.3"
 
 [dev-dependencies]
 cursive = "0.16"
-
-[badges]
-travis-ci = { repository = "deinstapel/cursive-async-view" }
