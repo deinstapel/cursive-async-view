@@ -7,7 +7,7 @@ use cursive_core::direction::Direction;
 use cursive_core::event::{AnyCb, Event, EventResult};
 use cursive_core::theme::PaletteColor;
 use cursive_core::utils::markup::StyledString;
-use cursive_core::view::{Selector, View, ViewNotFound};
+use cursive_core::view::{CannotFocus, Selector, View, ViewNotFound};
 use cursive_core::views::TextView;
 use cursive_core::{Cursive, Printer, Rect, Vec2};
 use interpolation::Ease;
@@ -671,17 +671,17 @@ impl<T: View + Sized> View for AsyncView<T> {
         }
     }
 
-    fn focus_view(&mut self, sel: &Selector) -> Result<(), ViewNotFound> {
+    fn focus_view(&mut self, sel: &Selector) -> Result<EventResult, ViewNotFound> {
         match self.view {
             AsyncState::Available(ref mut view) => view.focus_view(sel),
             _ => Err(ViewNotFound),
         }
     }
 
-    fn take_focus(&mut self, source: Direction) -> bool {
+    fn take_focus(&mut self, source: Direction) -> Result<EventResult, CannotFocus> {
         match self.view {
             AsyncState::Available(ref mut view) => view.take_focus(source),
-            _ => false,
+            _ => Err(CannotFocus),
         }
     }
 

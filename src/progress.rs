@@ -3,7 +3,7 @@ use cursive_core::direction::Direction;
 use cursive_core::event::{AnyCb, Event, EventResult};
 use cursive_core::theme::PaletteColor;
 use cursive_core::utils::markup::StyledString;
-use cursive_core::view::{Selector, View, ViewNotFound};
+use cursive_core::view::{CannotFocus, Selector, View, ViewNotFound};
 use cursive_core::views::TextView;
 use cursive_core::{Cursive, Printer, Rect, Vec2};
 use interpolation::Ease;
@@ -555,7 +555,7 @@ impl<T: View + Sized> View for AsyncProgressView<T> {
         }
     }
 
-    fn focus_view(&mut self, sel: &Selector) -> Result<(), ViewNotFound> {
+    fn focus_view(&mut self, sel: &Selector) -> Result<EventResult, ViewNotFound> {
         match &mut self.view {
             AsyncProgressState::Available(v) => v.focus_view(sel),
             AsyncProgressState::Error(_) | AsyncProgressState::Pending(_) => {
@@ -564,7 +564,7 @@ impl<T: View + Sized> View for AsyncProgressView<T> {
         }
     }
 
-    fn take_focus(&mut self, source: Direction) -> bool {
+    fn take_focus(&mut self, source: Direction) -> Result<EventResult, CannotFocus> {
         match &mut self.view {
             AsyncProgressState::Available(v) => v.take_focus(source),
             AsyncProgressState::Error(_) | AsyncProgressState::Pending(_) => {

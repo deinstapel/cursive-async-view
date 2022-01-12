@@ -13,7 +13,7 @@ documentation = "https://docs.rs/cursive-async-view"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cursive_core = "0.2"
+cursive_core = "0.3"
 log = "0.4"
 interpolation = "0.2.0"
 crossbeam = "0.8"
@@ -23,4 +23,4 @@ lazy_static = "1.4"
 doc-comment = "0.3"
 
 [dev-dependencies]
-cursive = "0.16"
+cursive = "0.17"
