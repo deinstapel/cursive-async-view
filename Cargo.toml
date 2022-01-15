@@ -15,12 +15,12 @@ documentation = "https://docs.rs/cursive-async-view"
 [dependencies]
 cursive_core = "0.3"
 log = "0.4"
-interpolation = "0.2.0"
+interpolation = "0.2"
 crossbeam = "0.8"
-num = "0.3"
+num = "0.4"
 send_wrapper = "0.5"
 lazy_static = "1.4"
 doc-comment = "0.3"
 
 [dev-dependencies]
-cursive = "0.17"
+cursive = "0.17.0"
