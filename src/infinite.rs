@@ -324,8 +324,9 @@ pub enum AsyncState<V: View> {
 pub struct AsyncView<T: View> {
     view: AsyncState<T>,
     loading: TextView,
-    animation_fn: Box<dyn Fn(usize, usize, usize) -> AnimationFrame + 'static>,
-    error_fn: Box<dyn Fn(&str, usize, usize, usize, usize) -> AnimationFrame + 'static>,
+    animation_fn: Box<dyn Fn(usize, usize, usize) -> AnimationFrame + Send + Sync + 'static>,
+    error_fn:
+        Box<dyn Fn(&str, usize, usize, usize, usize) -> AnimationFrame + Send + Sync + 'static>,
     width: Option<usize>,
     height: Option<usize>,
     pos: usize,
@@ -506,7 +507,7 @@ impl<T: View> AsyncView<T> {
         // 'static, meaning it owns all values and does not reference anything
         // outside of its scope. In practice this means all animation_fn must be
         // `move |width| {...}` or fn's.
-        F: Fn(usize, usize, usize) -> AnimationFrame + 'static,
+        F: Fn(usize, usize, usize) -> AnimationFrame + Send + Sync + 'static,
     {
         self.set_animation_fn(animation_fn);
         self
@@ -523,7 +524,7 @@ impl<T: View> AsyncView<T> {
         // 'static, meaning it owns all values and does not reference anything
         // outside of its scope. In practice this means all animation_fn must be
         // `move |width| {...}` or fn's.
-        F: Fn(&str, usize, usize, usize, usize) -> AnimationFrame + 'static,
+        F: Fn(&str, usize, usize, usize, usize) -> AnimationFrame + Send + Sync + 'static,
     {
         self.set_error_fn(error_fn);
         self
@@ -547,7 +548,7 @@ impl<T: View> AsyncView<T> {
     /// the previous loading animation has already started.
     pub fn set_animation_fn<F>(&mut self, animation_fn: F)
     where
-        F: Fn(usize, usize, usize) -> AnimationFrame + 'static,
+        F: Fn(usize, usize, usize) -> AnimationFrame + Send + Sync + 'static,
     {
         self.animation_fn = Box::new(animation_fn);
     }
@@ -560,7 +561,7 @@ impl<T: View> AsyncView<T> {
     /// the previous error animation has already started.
     pub fn set_error_fn<F>(&mut self, error_fn: F)
     where
-        F: Fn(&str, usize, usize, usize, usize) -> AnimationFrame + 'static,
+        F: Fn(&str, usize, usize, usize, usize) -> AnimationFrame + Send + Sync + 'static,
     {
         self.error_fn = Box::new(error_fn);
     }
