@@ -260,9 +260,15 @@ pub fn default_progress_error(
 pub struct AsyncProgressView<T: View> {
     view: AsyncProgressState<T>,
     loading: TextView,
-    progress_fn: Box<dyn Fn(usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static>,
-    error_fn:
-        Box<dyn Fn(String, usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static>,
+    progress_fn: Box<
+        dyn Fn(usize, usize, f32, usize, usize) -> AnimationProgressFrame + Send + Sync + 'static,
+    >,
+    error_fn: Box<
+        dyn Fn(String, usize, usize, f32, usize, usize) -> AnimationProgressFrame
+            + Send
+            + Sync
+            + 'static,
+    >,
     width: Option<usize>,
     height: Option<usize>,
     view_rx: Receiver<AsyncProgressState<T>>,
@@ -383,7 +389,7 @@ impl<T: View> AsyncProgressView<T> {
     /// example on how to create a custom progress function.
     pub fn with_progress_fn<F>(mut self, progress_fn: F) -> Self
     where
-        F: Fn(usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static,
+        F: Fn(usize, usize, f32, usize, usize) -> AnimationProgressFrame + Send + Sync + 'static,
     {
         self.set_progress_fn(progress_fn);
         self
@@ -391,7 +397,10 @@ impl<T: View> AsyncProgressView<T> {
 
     pub fn with_error_fn<F>(mut self, error_fn: F) -> Self
     where
-        F: Fn(String, usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static,
+        F: Fn(String, usize, usize, f32, usize, usize) -> AnimationProgressFrame
+            + Send
+            + Sync
+            + 'static,
     {
         self.set_error_fn(error_fn);
         self
@@ -415,7 +424,7 @@ impl<T: View> AsyncProgressView<T> {
     /// the previous progress bar has already be drawn.
     pub fn set_progress_fn<F>(&mut self, progress_fn: F)
     where
-        F: Fn(usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static,
+        F: Fn(usize, usize, f32, usize, usize) -> AnimationProgressFrame + Send + Sync + 'static,
     {
         self.progress_fn = Box::new(progress_fn);
     }
@@ -428,7 +437,10 @@ impl<T: View> AsyncProgressView<T> {
     /// the previous progress bar has already be drawn.
     pub fn set_error_fn<F>(&mut self, error_fn: F)
     where
-        F: Fn(String, usize, usize, f32, usize, usize) -> AnimationProgressFrame + 'static,
+        F: Fn(String, usize, usize, f32, usize, usize) -> AnimationProgressFrame
+            + Send
+            + Sync
+            + 'static,
     {
         self.error_fn = Box::new(error_fn);
     }
